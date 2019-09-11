@@ -1811,6 +1811,63 @@ def run_sep(image, noise):
     return objs, seg
 
 
+@njit
+def _get_groups(seg, pairs):
+
+    nrow, ncol = seg.shape
+
+    pi = 0
+    for row in range(nrow):
+        rowstart = row-1
+        rowend = row+1
+
+        for col in range(ncol):
+
+            ind = seg[row, col]
+            if ind == 0:
+                continue
+
+            colstart = col-1
+            colend = col+1
+
+            for checkrow in range(rowstart, rowend+1):
+                if checkrow == -1 or checkrow == nrow:
+                    continue
+
+                for checkcol in range(colstart, colend+1):
+                    if checkcol == -1 or checkcol == ncol:
+                        continue
+
+                    if checkrow == row and checkcol == col:
+                        continue
+
+                    checkind = seg[checkrow, checkcol]
+                    if checkind != 0 and checkind != ind:
+                        if pi == 0:
+                            pairs[pi, 0] = ind
+                            pairs[pi, 1] = checkind
+                        else:
+                            # implement sensible checks here
+                            pass
+
+
+def get_groups(seg):
+    """
+    group any objects whose seg maps touch
+    """
+
+    ids = np.unique(seg)
+    w, = np.where(ids != 0)
+    ids = ids[w]
+    nobj = ids.size
+
+    pairs = np.zeros((2, seg.size), dtype='i8')
+
+    _get_groups(seg, pairs)
+
+    return nbrs
+
+
 def run_peaks(image, noise, scale, kernel_fwhm, weight_fwhm=1.2):
     import peaks
 
