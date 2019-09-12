@@ -1897,31 +1897,28 @@ def plot_seg(segin, title=None, width=1000, rng=None, show=False):
     """
     plot the seg map with randomized ids for better display
     """
-    import pcolors
 
     seg = np.transpose(segin)
 
     cseg = np.zeros((seg.shape[0], seg.shape[1], 3))
 
     if rng is None:
-        shuffle = np.random.shuffle
-    else:
-        shuffle = rng.shuffle
+        rng = np.random.RandomState()
 
     useg = np.unique(seg)[1:]
 
-    colors = np.array(pcolors.rainbow(useg.size, type='rgb'))
-    shuffle(colors)
+    low = 50/255
+    high = 255/255
 
     for i, segval in enumerate(useg):
 
         w = np.where(seg == segval)
 
-        color = colors[i]
+        r, g, b = rng.uniform(low=low, high=high, size=3)
 
-        cseg[w[0], w[1], 0] = color[0]/255
-        cseg[w[0], w[1], 1] = color[1]/255
-        cseg[w[0], w[1], 2] = color[2]/255
+        cseg[w[0], w[1], 0] = r
+        cseg[w[0], w[1], 1] = g
+        cseg[w[0], w[1], 2] = b
 
     plt = images.view(cseg, show=False)
 
@@ -2515,7 +2512,7 @@ def test_fixcen(real_data=False,
             numbers = indices + 1
             mbobs, seg = get_fof_mbobs(mbobs, seg, numbers, rng)
 
-            # splt = plot_seg(seg, rng=rng, show=True)
+            plot_seg(seg, rng=rng, show=True)
             # return
 
             imlist = [o[0].image for o in mbobs]
