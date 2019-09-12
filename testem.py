@@ -1417,6 +1417,7 @@ def view_rgb(imlist, wtlist, scale):
 
 def compare_rgb_images(image, model, diffim,
                        seg, width, chi2,
+                       rng=None,
                        title=None,
                        model_noisy=None):
     import biggles
@@ -1429,7 +1430,7 @@ def compare_rgb_images(image, model, diffim,
         arat = 2.0/3.0
         tab = biggles.Table(2, 3, aspect_ratio=arat)
     else:
-        arat = 1.0
+        arat = image.shape[1]/image.shape[0]
         tab = biggles.Table(2, 2, aspect_ratio=arat)
 
     tab[0, 0] = images.view(
@@ -1461,11 +1462,14 @@ def compare_rgb_images(image, model, diffim,
         title='diff chi2/dof: %.2f' % chi2per,
     )
 
+    """
     tab[1, 1] = images.view(
         seg,
         show=False,
         title='seg',
     )
+    """
+    tab[1, 1] = plot_seg(seg, rng=rng, width=width)
 
     if title is not None:
         tab.title = title
@@ -1853,6 +1857,37 @@ def run_sep(image, noise):
         segmentation_map=True,
     )
     return objs, seg
+
+
+def plot_seg(segin, width=1000, rng=None, show=False):
+    """
+    plot the seg map with randomized ids for better display
+    """
+
+    seg = segin.copy()
+
+    if rng is None:
+        shuffle = np.random.shuffle
+    else:
+        shuffle = rng.shuffle
+
+    useg = np.unique(seg)
+    rseg = useg.copy()
+    shuffle(rseg)
+
+    for i, segval in enumerate(useg):
+        if segval == 0:
+            continue
+        w = np.where(segin == segval)
+        seg[w] = rseg[i]
+
+    plt = images.view(seg, show=False)
+    if show:
+        srat = seg.shape[1]/seg.shape[0]
+        plt.write_img(width, width*srat, '/tmp/seg.png')
+        os.system('feh /tmp/seg.png &')
+
+    return plt
 
 
 @njit
@@ -2423,7 +2458,6 @@ def test_fixcen(real_data=False,
         noise = np.sqrt(1/coadd_obs.weight[0, 0])
         if det_method == 'sep':
             objs, seg = run_sep(coadd_obs.image, noise)
-            images.view(seg)
 
             fofs = get_fofs(seg)
             show_fofs(mbobs, objs, fofs, viewscale=viewscale, width=width)
@@ -2434,6 +2468,8 @@ def test_fixcen(real_data=False,
 
             numbers = indices + 1
             mbobs, seg = get_fof_mbobs(mbobs, seg, numbers, rng)
+
+            # splt = plot_seg(seg, rng=rng)
 
             imlist = [o[0].image for o in mbobs]
             wtlist = [o[0].weight for o in mbobs]
@@ -2607,6 +2643,7 @@ def test_fixcen(real_data=False,
 
             compare_rgb_images(rgb, model_rgb, diff_rgb,
                                seg, width, chi2,
+                               rng=rng,
                                # model_noisy=model_rgb_noisy,
                                title=title)
 
