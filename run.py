@@ -1,7 +1,7 @@
 import testem
 
 for seed in range(3001,100000):
-     testem.test_descwl_fixcen(
+     testem.test_fixcen(
          nobj=200,
          show=True,
          noise_factor=1,
