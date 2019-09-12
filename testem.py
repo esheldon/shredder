@@ -2516,6 +2516,8 @@ def test_real(min_fofsize=2,
     wlarge, = np.where(hd['hist'] >= min_fofsize)
     nfofs = wlarge.size
     print('found %d groups with size >= %d' % (nfofs, min_fofsize))
+    if nfofs == 0:
+        return
 
     rev = hd['rev']
     for ifof in range(nfofs):
@@ -2526,6 +2528,7 @@ def test_real(min_fofsize=2,
 
         i = wlarge[ifof]
         indices = rev[rev[i]:rev[i+1]]
+        print('FoF size:', indices.size)
 
         # fof_objs = objs[indices]
         # fofid = fofs['fofid'][indices[0]]
@@ -2547,8 +2550,9 @@ def test_real(min_fofsize=2,
         fof_coadd_obs = make_coadd_obs(fof_mbobs)
         do_psf_fit(fof_coadd_obs.psf, rng)
 
-        this_time += time.time() - this_tm0
 
+        """
+        this_time += time.time() - this_tm0
         show_fofs(
             fof_mbobs,
             fof_objs,
@@ -2557,8 +2561,9 @@ def test_real(min_fofsize=2,
             viewscale=viewscale,
             width=width,
         )
-
         this_tm0 = time.time()
+        """
+
 
         imsky, sky = ngmix.em.prep_image(fof_coadd_obs.image)
         emobs = Observation(
