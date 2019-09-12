@@ -1459,7 +1459,7 @@ def compare_rgb_images(image, model, diffim,
     tab[1, 0] = images.view(
         diffim,
         show=False,
-        title='diff chi2/dof: %.2f' % chi2per,
+        title='chi2/dof: %.2f' % chi2per,
     )
 
     """
@@ -1469,7 +1469,7 @@ def compare_rgb_images(image, model, diffim,
         title='seg',
     )
     """
-    tab[1, 1] = plot_seg(seg, rng=rng, width=width)
+    tab[1, 1] = plot_seg(seg, rng=rng, width=width, title='seg')
 
     if title is not None:
         tab.title = title
@@ -1859,7 +1859,7 @@ def run_sep(image, noise):
     return objs, seg
 
 
-def plot_seg(segin, width=1000, rng=None, show=False):
+def plot_seg_bw(segin, title=None, width=1000, rng=None, show=False):
     """
     plot the seg map with randomized ids for better display
     """
@@ -1882,6 +1882,52 @@ def plot_seg(segin, width=1000, rng=None, show=False):
         seg[w] = rseg[i]
 
     plt = images.view(seg, show=False)
+    if title is not None:
+        plt.title = title
+
+    if show:
+        srat = seg.shape[1]/seg.shape[0]
+        plt.write_img(width, width*srat, '/tmp/seg.png')
+        os.system('feh /tmp/seg.png &')
+
+    return plt
+
+
+def plot_seg(segin, title=None, width=1000, rng=None, show=False):
+    """
+    plot the seg map with randomized ids for better display
+    """
+    import pcolors
+
+    seg = np.transpose(segin)
+
+    cseg = np.zeros((seg.shape[0], seg.shape[1], 3))
+
+    if rng is None:
+        shuffle = np.random.shuffle
+    else:
+        shuffle = rng.shuffle
+
+    useg = np.unique(seg)[1:]
+
+    colors = np.array(pcolors.rainbow(useg.size, type='rgb'))
+    shuffle(colors)
+
+    for i, segval in enumerate(useg):
+
+        w = np.where(seg == segval)
+
+        color = colors[i]
+
+        cseg[w[0], w[1], 0] = color[0]/255
+        cseg[w[0], w[1], 1] = color[1]/255
+        cseg[w[0], w[1], 2] = color[2]/255
+
+    plt = images.view(cseg, show=False)
+
+    if title is not None:
+        plt.title = title
+
     if show:
         srat = seg.shape[1]/seg.shape[0]
         plt.write_img(width, width*srat, '/tmp/seg.png')
@@ -2469,7 +2515,8 @@ def test_fixcen(real_data=False,
             numbers = indices + 1
             mbobs, seg = get_fof_mbobs(mbobs, seg, numbers, rng)
 
-            # splt = plot_seg(seg, rng=rng)
+            # splt = plot_seg(seg, rng=rng, show=True)
+            # return
 
             imlist = [o[0].image for o in mbobs]
             wtlist = [o[0].weight for o in mbobs]
