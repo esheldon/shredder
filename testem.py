@@ -40,6 +40,10 @@ EM_MAXITER = 2**1
 GMIX_LOW_DETVAL_THIS = 0.001
 
 
+def show_image(fname):
+    os.system('feh --force-aliasing -B black %s &' % fname)
+
+
 @njit
 def em_convolve_1gauss(gmix, gmix_psf, fix=False):
     psf_irr = gmix_psf['irr'][0]
@@ -1474,9 +1478,9 @@ def compare_rgb_images(image, model, diffim,
     if title is not None:
         tab.title = title
 
-    # tab.show(width=width, height=width*arat)
-    tab.write_img(width, width*arat, '/tmp/tmp-comp.png')
-    os.system('feh /tmp/tmp-comp.png &')
+    fname = '/tmp/tmp-comp.png'
+    tab.write_img(width, width*arat, fname)
+    show_image(fname)
 
 
 def get_shape_guess(g1, g2, width, rng, gmax=0.9):
@@ -1856,41 +1860,11 @@ def run_sep(image, noise):
         filter_kernel=KERNEL,
         segmentation_map=True,
     )
+
+    add_dt = [('number', 'i4')]
+    objs = eu.numpy_util.add_fields(objs, add_dt)
+    objs['number'] = np.arange(1, objs.size+1)
     return objs, seg
-
-
-def plot_seg_bw(segin, title=None, width=1000, rng=None, show=False):
-    """
-    plot the seg map with randomized ids for better display
-    """
-
-    seg = segin.copy()
-
-    if rng is None:
-        shuffle = np.random.shuffle
-    else:
-        shuffle = rng.shuffle
-
-    useg = np.unique(seg)
-    rseg = useg.copy()
-    shuffle(rseg)
-
-    for i, segval in enumerate(useg):
-        if segval == 0:
-            continue
-        w = np.where(segin == segval)
-        seg[w] = rseg[i]
-
-    plt = images.view(seg, show=False)
-    if title is not None:
-        plt.title = title
-
-    if show:
-        srat = seg.shape[1]/seg.shape[0]
-        plt.write_img(width, width*srat, '/tmp/seg.png')
-        os.system('feh /tmp/seg.png &')
-
-    return plt
 
 
 def plot_seg(segin, title=None, width=1000, rng=None, show=False):
@@ -1927,8 +1901,9 @@ def plot_seg(segin, title=None, width=1000, rng=None, show=False):
 
     if show:
         srat = seg.shape[1]/seg.shape[0]
-        plt.write_img(width, width*srat, '/tmp/seg.png')
-        os.system('feh /tmp/seg.png &')
+        fname = '/tmp/seg.png'
+        plt.write_img(width, width*srat, fname)
+        show_image(fname)
 
     return plt
 
@@ -2118,7 +2093,16 @@ def get_large_fof(fofs, minsize):
     return fofid, fofs['number'][w]-1
 
 
-def _replace_with_noise(obs, indices, rng):
+def _replace_with_noise(image, weight, indices, rng):
+    noise = np.sqrt(1.0/weight.max())
+    noise_image = rng.normal(
+        scale=noise,
+        size=image.shape
+    )
+    image[indices] = noise_image[indices]
+
+
+def _replace_with_noise_old(obs, indices, rng):
     weight = obs.weight
     noise = np.sqrt(1.0/weight.max())
     noise_image = rng.normal(
@@ -2136,47 +2120,89 @@ def _replace_with_noise(obs, indices, rng):
     )
 
 
-def get_fof_mbobs(obs, seg, keep_numbers, rng):
+def get_fof_mbobs_and_objs(mbobs,
+                           objs,
+                           seg,
+                           keep_numbers,
+                           rng,
+                           pixbuf=10):
     """
     get images with everythine noisy outside the
     FoF seg map
     """
 
+    keep_indices = keep_numbers - 1
+
+    mincol = objs['xmin'][keep_indices].min() - pixbuf
+    maxcol = objs['xmax'][keep_indices].max() + pixbuf
+    minrow = objs['ymin'][keep_indices].min() - pixbuf
+    maxrow = objs['ymax'][keep_indices].max() + pixbuf
+
+    if minrow < 0:
+        minrow = 0
+    if maxrow > seg.shape[0]:
+        maxrow = seg.shape[0]
+
+    if mincol < 0:
+        mincol = 0
+    if maxcol > seg.shape[1]:
+        maxcol = seg.shape[1]
+
+    newseg = seg[
+        minrow:maxrow,
+        mincol:maxcol,
+    ].copy()
+
+    new_objs = objs[keep_indices].copy()
+    new_objs['y'] -= minrow
+    new_objs['x'] -= mincol
+
     for i, number in enumerate(keep_numbers):
-        tlogic = seg != number
+        tlogic = newseg != number
         if i == 0:
             logic = tlogic
         else:
             logic &= tlogic
 
-    w = np.where(logic)
-    if w[0].size == 0:
-        return obs
+    wout = np.where(logic)
+    newseg[wout] = 0
 
-    newseg = seg.copy()
-    newseg[w] = 0
+    new_mbobs = ngmix.MultiBandObsList()
+    for obslist in mbobs:
+        new_obslist = ngmix.ObsList()
+        for obs in obslist:
+            new_image = obs.image[
+                minrow:maxrow,
+                mincol:maxcol,
+            ].copy()
+            new_weight = obs.weight[
+                minrow:maxrow,
+                mincol:maxcol,
+            ].copy()
 
-    if isinstance(obs, ngmix.MultiBandObsList):
+            _replace_with_noise(new_image, new_weight, wout, rng)
 
-        mbobs = obs
-        new_mbobs = ngmix.MultiBandObsList()
-        for obslist in mbobs:
-            new_obslist = ngmix.ObsList()
-            for obs in obslist:
-                new_obs = _replace_with_noise(obs, w, rng)
-                new_obslist.append(new_obs)
-            new_mbobs.append(new_obslist)
-        output = new_mbobs
+            new_obs = ngmix.Observation(
+                new_image,
+                weight=new_weight,
+                jacobian=obs.jacobian,
+                psf=obs.psf,
+            )
 
-    elif isinstance(obs, ngmix.Observation):
-        output = _replace_with_noise(obs, w, rng)
+            new_obslist.append(new_obs)
 
-    return output, newseg
+        new_mbobs.append(new_obslist)
+    output = new_mbobs
+
+    return output, newseg, new_objs
 
 
-def show_fofs(mbobs, cat, fofs,
-              fof_ids=None,
-              minsize=2, viewscale=0.0005, width=1000):
+def show_fofs(mbobs,
+              cat,
+              fofs,
+              minsize=2,
+              viewscale=0.0005,
+              width=1000):
     import pcolors
     import random
 
@@ -2184,41 +2210,44 @@ def show_fofs(mbobs, cat, fofs,
 
     ufofs = np.unique(fofs['fofid'])
 
+    print(fofs['fofid'])
     hd = eu.stat.histogram(fofs['fofid'], more=True)
     wlarge, = np.where(hd['hist'] >= minsize)
     print('found %d groups with size >= %d' % (wlarge.size, minsize))
     ngroup = wlarge.size
+
     if ngroup > 0:
-        colors = pcolors.rainbow(ngroup)
-        random.shuffle(colors)
-    else:
-        colors = None
+        if ngroup > 1:
+            colors = pcolors.rainbow(ngroup)
+            random.shuffle(colors)
+        else:
+            colors = ['white']
 
-    icolor = 0
-    for fofid in ufofs:
-        if fof_ids is not None:
-            if fofid not in fof_ids:
-                continue
+        icolor = 0
+        for fofid in ufofs:
+            w, = np.where(fofs['fofid'] == fofid)
+            if w.size >= minsize:
+                print('plotting fof', fofid, 'size', w.size)
 
-        w, = np.where(fofs['fofid'] == fofid)
-        if w.size >= minsize:
-            print('plotting fof', fofid, 'size', w.size)
-            index = fofs['number'][w]-1
+                mfofs, mcat = eu.numpy_util.match(
+                    fofs['number'][w],
+                    cat['number'],
+                )
 
-            color = colors[icolor]
-            icolor += 1
-            pts = biggles.Points(
-                cat['x'][index],
-                cat['y'][index],
-                type='filled circle',
-                size=1,
-                color=color,
-            )
-            plt.add(pts)
+                color = colors[icolor]
+                icolor += 1
+                pts = biggles.Points(
+                    cat['x'][mcat],
+                    cat['y'][mcat],
+                    type='filled circle',
+                    size=1,
+                    color=color,
+                )
+                plt.add(pts)
 
     fname = tempfile.mktemp(suffix='.png')
     plt.write_img(width, width, fname)
-    os.system('feh %s &' % fname)
+    show_image(fname)
 
 
 def run_peaks(image, noise, scale, kernel_fwhm, weight_fwhm=1.2):
@@ -2335,19 +2364,27 @@ def get_guess_from_detect(objs, scale, ur, model):
     return gm_guess
 
 
-def read_real_images(row_range=None,
-                     col_range=None):
+def read_real_images(**kw):
     """
     read some example data
     """
     import psfex
 
-    if row_range is None:
-        # row_range = (2000, 2200)
+    if 'row_range' not in kw:
         row_range = (1470, 1680)
-    if col_range is None:
-        # col_range = (2000, 2200)
+    else:
+        row_range = kw['row_range']
+
+    if 'col_range' not in kw:
         col_range = (520, 790)
+    else:
+        col_range = kw['col_range']
+
+    if row_range is None:
+        row_range = [0, 2200]
+
+    if col_range is None:
+        col_range = [0, 4200]
 
     rowmin, rowmax = row_range
     colmin, colmax = col_range
@@ -2424,6 +2461,252 @@ def read_real_images(row_range=None,
     return mbobs
 
 
+def test_real(min_fofsize=2,
+              row_range=None,
+              col_range=None,
+              model='dev',
+              tol=1.0e-3,
+              maxiter=40000,
+              viewscale=0.2,
+              show=False,
+              title=None,
+              width=1000,
+              seed=None):
+    """
+    true positions, ngauss related to T
+    """
+    import time
+
+    print('seed:', seed)
+    rng = np.random.RandomState(seed)
+
+    mbobs = read_real_images(
+        row_range=row_range,
+        col_range=col_range,
+    )
+
+    ur = rng.uniform
+
+    tm = 0.0
+
+    for obslist in mbobs:
+        for obs in obslist:
+            do_psf_fit(obs.psf, rng)
+
+    # coadd over bands
+    coadd_obs = make_coadd_obs(mbobs)
+    scale = coadd_obs.jacobian.scale
+    do_psf_fit(coadd_obs.psf, rng)
+
+    noise = np.sqrt(1/coadd_obs.weight.max())
+
+    objs, seg = run_sep(coadd_obs.image, noise)
+    print('found', objs.size, 'objects')
+
+    if objs.size == 0:
+        if show:
+            view_rgb(mbobs, scale=viewscale, show=True)
+        return
+
+    fofs = get_fofs(seg)
+    show_fofs(mbobs, objs, fofs, viewscale=viewscale, width=width)
+
+    hd = eu.stat.histogram(fofs['fofid'], more=True)
+    wlarge, = np.where(hd['hist'] >= min_fofsize)
+    nfofs = wlarge.size
+    print('found %d groups with size >= %d' % (nfofs, min_fofsize))
+
+    rev = hd['rev']
+    for ifof in range(nfofs):
+        print('-'*70)
+        print('FoF group %d/%d' % (ifof+1, nfofs))
+
+        i = wlarge[ifof]
+        indices = rev[rev[i]:rev[i+1]]
+
+        # fof_objs = objs[indices]
+        fofid = fofs['fofid'][indices[0]]
+
+        numbers = indices + 1
+        fof_mbobs, fof_seg, fof_objs = get_fof_mbobs_and_objs(
+            mbobs,
+            objs,
+            seg,
+            numbers,
+            rng,
+        )
+
+        # plot_seg(fof_seg, rng=rng, show=True)
+        # return
+
+        fof_coadd_obs = make_coadd_obs(fof_mbobs)
+        do_psf_fit(fof_coadd_obs.psf, rng)
+
+        show_fofs(
+            fof_mbobs,
+            fof_objs,
+            fofs[indices],
+            # fof_ids=[fofid],
+            viewscale=viewscale,
+            width=width,
+        )
+
+        tm0 = time.time()
+
+        imsky, sky = ngmix.em.prep_image(fof_coadd_obs.image)
+        emobs = Observation(
+            imsky,
+            jacobian=fof_coadd_obs.jacobian,
+            psf=fof_coadd_obs.psf,
+        )
+
+        for itry in range(2):
+
+            gm_guess = get_guess_from_detect(
+                fof_objs,
+                scale,
+                ur,
+                model,
+            )
+
+            em = GMixEMFixCen(emobs)
+            em.go(gm_guess, sky, miniter=50, maxiter=maxiter, tol=tol)
+
+            res = em.get_result()
+            if res['flags'] == 0:
+                break
+
+        if res['flags'] != 0:
+            print('could not do fit')
+            if show and input('enter a key, q to quit: ') == 'q':
+                return
+
+            continue
+
+        # this gmix is the pre-seeing one
+        gmfit = em.get_gmix()
+
+        print('results')
+        print(res)
+
+        #
+        # now fit to each band, letting the fluxes vary
+        #
+
+        imlist = []
+        wtlist = []
+        byband_gm = []
+        byband_pars = []
+        byband_imlist = []
+        byband_wtlist = []
+        difflist = []
+        chi2 = 0.0
+
+        for band, obslist in enumerate(fof_mbobs):
+            obs = obslist[0]
+
+            imlist.append(obs.image)
+            wtlist.append(obs.weight)
+
+            imsky, sky = ngmix.em.prep_image(obs.image)
+            emobs = Observation(imsky, jacobian=obs.jacobian)
+            em = GMixEMPOnly(emobs)
+
+            for itry in range(4):
+                # this is pre-psf
+                gm_guess = gmfit.copy()
+
+                # convolve with psf from this band and let things adjust
+                em_convolve_1gauss(
+                    gm_guess.get_data(),
+                    obs.psf.gmix.get_data(),
+                    fix=True,
+                )
+
+                gdata = gm_guess.get_data()
+                for idata in range(gdata.size):
+                    gdata['p'][idata] *= (1.0 + ur(low=-0.01, high=0.01))
+
+                use_sky = res['sky']
+
+                em.go(
+                    gm_guess,
+                    use_sky,
+                    maxiter=maxiter,
+                    tol=tol,
+                )
+
+                bres = em.get_result()
+                if bres['flags'] == 0:
+                    break
+
+            if bres['flags'] != 0:
+                if bres['message'] != 'OK':
+                    raise RuntimeError('cannot proceed')
+
+                print('did not succeed, going ahead anyway')
+
+            bgm = em.get_gmix()
+            print('band %d res:' % band)
+            print(bres)
+
+            bim = bgm.make_image(
+                obs.image.shape,
+                jacobian=obs.jacobian,
+            )
+
+            bflux_tot, bflux_tot_err = get_flux(
+                obs.image,
+                obs.weight,
+                bim,
+            )
+            bgm.set_flux(bflux_tot*obs.jacobian.scale**2)
+            # bim *= bflux_tot/bim.sum()
+            bim = bgm.make_image(
+                obs.image.shape,
+                jacobian=obs.jacobian,
+            )
+
+            byband_gm.append(bgm)
+            byband_pars.append(bgm.get_full_pars())
+            byband_imlist.append(bim)
+            byband_wtlist.append(obs.weight)
+
+            tdiff = obs.image - bim
+            difflist.append(tdiff)
+            chi2 += (tdiff**2 * obs.weight).sum()
+
+        this_tm = time.time() - tm0
+        print('this time:', tm)
+        tm += this_tm
+
+        if show:
+            rgb = make_rgb(imlist, wtlist, scale=viewscale)
+
+            model_rgb = make_rgb(byband_imlist, byband_wtlist, scale=viewscale)
+
+            diff_rgb = make_rgb(difflist, byband_wtlist, scale=viewscale)
+
+            compare_rgb_images(
+                rgb,
+                model_rgb,
+                diff_rgb,
+                fof_seg,
+                width,
+                chi2,
+                rng=rng,
+                title=title,
+                # model_noisy=model_rgb_noisy,
+            )
+
+        if nfofs > 1 and ifof < nfofs-1 and show:
+            if input('enter a key, q to quit: ') == 'q':
+                return
+
+    print('total time:', tm)
+    print('time per:', tm/nfofs)
+
+
 def test_fixcen(real_data=False,
                 min_fofsize=40,
                 row_range=None,
@@ -2478,12 +2761,12 @@ def test_fixcen(real_data=False,
         imlist = [o[0].image for o in mbobs]
         wtlist = [o[0].weight for o in mbobs]
 
-        if show:
+        if False and show:
             rgb = make_rgb(imlist, wtlist, scale=viewscale)
             plt = images.view(rgb, show=False)
-            plt.write_img(width, width, '/tmp/orig.png')
-            os.system('feh /tmp/orig.png &')
-            # return
+            fname = '/tmp/orig.png'
+            plt.write_img(width, width, fname)
+            show_image(fname)
 
         for obslist in mbobs:
             for obs in obslist:
@@ -2512,7 +2795,7 @@ def test_fixcen(real_data=False,
             numbers = indices + 1
             mbobs, seg = get_fof_mbobs(mbobs, seg, numbers, rng)
 
-            plot_seg(seg, rng=rng, show=True)
+            # plot_seg(seg, rng=rng, show=True)
             # return
 
             imlist = [o[0].image for o in mbobs]
@@ -3463,8 +3746,9 @@ def test_descwl(sim_config='dbsim.yaml',
 
             wfac = 1
             # eachtab.show(width=width*wfac, height=width*wfac*trat)
-            eachtab.write_img(width*wfac, width*wfac*trat, '/tmp/each.png')
-            os.system('feh /tmp/each.png &')
+            fname = '/tmp/each.png'
+            eachtab.write_img(width*wfac, width*wfac*trat, fname)
+            show_image(fname)
             """
 
         if ntrial > 1 and show:
@@ -4362,5 +4646,3 @@ def test_multi_sep_ps(nobj=4,
             tab.title = title
 
         tab.show(width=width, height=width)
-        # tab.write_img(width, width, '/tmp/comp.png')
-        # os.system('feh /tmp/comp.png &')
