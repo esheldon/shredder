@@ -1,16 +1,16 @@
 import testem
 
-for seed in range(2000,3000):
-     testem.test_descwl_fixcen_fromcoadd(
-         nobj=1,
+for seed in range(3001,100000):
+     testem.test_descwl_fixcen(
+         nobj=200,
          show=True,
-         noise_factor=.01,
-         viewscale=0.05,
+         noise_factor=1,
+         viewscale=0.0005,
          width=2000,
          model='exp',
          seed=seed,
          title='1.0e-3',
-         sim_config='dbsim-small.yaml',
+         sim_config='dbsim-huge.yaml',
          tol=1.0e-3,
      )
 

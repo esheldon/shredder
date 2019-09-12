@@ -17,17 +17,20 @@ from ngmix import Observation
 from numba import njit
 import esutil as eu
 
+# argh, forgot to import
+from esutil.pbar import prange
+
 from ngmix.gmix_nb import (
     gauss2d_set,
     gmix_set_norms,
     gauss2d_set_norm,
-    gmix_get_e1e2T,
     GMIX_LOW_DETVAL,
 )
 from ngmix.fastexp import expd
 import biggles
 import plotting
 import images
+import copy
 
 
 EM_RANGE_ERROR = 2**0
@@ -110,7 +113,6 @@ def em_run_fixcen(conf, pixels, sums, gmix, gmix_psf):
 
     em_convolve_1gauss(gmix, gmix_psf)
     gmix_set_norms(gmix)
-    # print(gmix)
 
     tol = conf['tol']
     counts = conf['counts']
@@ -580,6 +582,7 @@ def em_run_fixsize_logL(conf, pixels, sums, gmix):
     # return numiter, maxdiff, psky*(counts/area)
     return numiter, frac_diff, psky*(counts/area)
 
+
 @njit
 def em_run_fixsize_pos(conf, pixels, sums, gmix):
     """
@@ -615,7 +618,7 @@ def em_run_fixsize_pos(conf, pixels, sums, gmix):
     nsky = conf['sky_guess']/counts
     psky = conf['sky_guess']/(counts/area)
 
-    elogL_last = 9999.9e9
+    # elogL_last = 9999.9e9
 
     for i in range(conf['maxiter']):
 
@@ -718,7 +721,8 @@ def do_scratch_sums_fixsize(pixel, gmix, sums):
         tsums['trowsum'] = v*tsums['gi']
         tsums['tcolsum'] = u*tsums['gi']
 
-        # logL += tsums['gi']*(tsums['logtau'] - 0.5*tsums['logdet'] - 0.5*chi2)
+        # logL += tsums['gi']*(tsums['logtau']
+        # - 0.5*tsums['logdet'] - 0.5*chi2)
         logL += tsums['gi']*(tsums['logtau'] - 0.5*chi2)
 
     if gtot == 0.0:
@@ -1812,60 +1816,164 @@ def run_sep(image, noise):
 
 
 @njit
-def _get_groups(seg, pairs):
+def _get_seg_pairs(seg, pairs):
 
     nrow, ncol = seg.shape
 
     pi = 0
     for row in range(nrow):
-        rowstart = row-1
-        rowend = row+1
+        rowstart = row - 1
+        rowend = row + 1
 
         for col in range(ncol):
 
             ind = seg[row, col]
+
             if ind == 0:
+                # 0 means this pixel is not assigned to an object
                 continue
 
-            colstart = col-1
-            colend = col+1
+            colstart = col - 1
+            colend = col + 1
 
-            for checkrow in range(rowstart, rowend+1):
-                if checkrow == -1 or checkrow == nrow:
+            for crow in range(rowstart, rowend+1):
+                if crow == -1 or crow == nrow:
                     continue
 
-                for checkcol in range(colstart, colend+1):
-                    if checkcol == -1 or checkcol == ncol:
+                for ccol in range(colstart, colend+1):
+                    if ccol == -1 or ccol == ncol:
                         continue
 
-                    if checkrow == row and checkcol == col:
+                    if crow == row and ccol == col:
                         continue
 
-                    checkind = seg[checkrow, checkcol]
-                    if checkind != 0 and checkind != ind:
-                        if pi == 0:
-                            pairs[pi, 0] = ind
-                            pairs[pi, 1] = checkind
-                        else:
-                            # implement sensible checks here
-                            pass
+                    cind = seg[crow, ccol]
+
+                    if cind != 0 and cind != ind:
+                        # we found a neighboring pixel assigned
+                        # to another object
+                        pairs['number'][pi] = ind
+                        pairs['nbr_number'][pi] = cind
+                        pi += 1
+
+    npairs = pi
+    return npairs
 
 
-def get_groups(seg):
+def _get_unique_pairs(pairs):
+    """
+    get unique pairs, assuming max seg id number is at most
+    1_000_000
+    """
+
+    tid = pairs['number']*1_000_000 + pairs['nbr_number']
+    uid, uid_index = np.unique(tid, return_index=True)
+    return pairs[uid_index]
+
+
+class NbrsFoF(object):
+    """
+    extract unique groups
+    """
+    def __init__(self, nbrs_data):
+        self.nbrs_data = nbrs_data
+        self.Nobj = len(np.unique(nbrs_data['number']))
+
+        # records fofid of entry
+        self.linked = np.zeros(self.Nobj, dtype='i8')
+        self.fofs = {}
+
+        self._fof_data = None
+
+    def get_fofs(self):
+        self._make_fofs()
+        return self._fof_data
+
+    def _make_fofs(self):
+        self._init_fofs()
+
+        for i in prange(self.Nobj):
+            self._link_fof(i)
+
+        for fofid, k in enumerate(self.fofs):
+            inds = np.array(list(self.fofs[k]), dtype=int)
+            self.linked[inds[:]] = fofid
+
+        self.fofs = {}
+
+        self._make_fof_data()
+
+    def _link_fof(self, mind):
+        # get nbrs for this object
+        nbrs = set(self._get_nbrs_index(mind))
+
+        # always make a base fof
+        if self.linked[mind] == -1:
+            fofid = copy.copy(mind)
+            self.fofs[fofid] = set([mind])
+            self.linked[mind] = fofid
+        else:
+            fofid = copy.copy(self.linked[mind])
+
+        # loop through nbrs
+        for nbr in nbrs:
+            if self.linked[nbr] == -1 or self.linked[nbr] == fofid:
+                # not linked so add to current
+                self.fofs[fofid].add(nbr)
+                self.linked[nbr] = fofid
+            else:
+                # join!
+                self.fofs[self.linked[nbr]] |= self.fofs[fofid]
+                del self.fofs[fofid]
+                fofid = copy.copy(self.linked[nbr])
+                inds = np.array(list(self.fofs[fofid]), dtype=int)
+                self.linked[inds[:]] = fofid
+
+    def _make_fof_data(self):
+        self._fof_data = []
+        for i in range(self.Nobj):
+            self._fof_data.append((self.linked[i], i+1))
+        self._fof_data = np.array(
+            self._fof_data,
+            dtype=[('fofid', 'i8'), ('number', 'i8')]
+        )
+        i = np.argsort(self._fof_data['number'])
+        self._fof_data = self._fof_data[i]
+        assert np.all(self._fof_data['fofid'] >= 0)
+
+    def _init_fofs(self):
+        self.linked[:] = -1
+        self.fofs = {}
+
+    def _get_nbrs_index(self, mind):
+        q, = np.where((self.nbrs_data['number'] == mind+1)
+                      & (self.nbrs_data['nbr_number'] > 0))
+        if len(q) > 0:
+            return list(self.nbrs_data['nbr_number'][q]-1)
+        else:
+            return []
+
+
+def get_fofs(seg):
     """
     group any objects whose seg maps touch
     """
 
+    """
     ids = np.unique(seg)
     w, = np.where(ids != 0)
     ids = ids[w]
     nobj = ids.size
+    """
 
-    pairs = np.zeros((2, seg.size), dtype='i8')
+    dtype = [('number', 'i4'), ('nbr_number', 'i4')]
+    pairs = np.zeros(seg.size, dtype=dtype)
 
-    _get_groups(seg, pairs)
+    _get_seg_pairs(seg, pairs)
+    pairs = _get_unique_pairs(pairs)
 
-    return nbrs
+    nf = NbrsFoF(pairs)
+    return nf.get_fofs()
 
 
 def run_peaks(image, noise, scale, kernel_fwhm, weight_fwhm=1.2):
@@ -1919,7 +2027,7 @@ def get_guess_from_detect(objs, scale, ur, model):
             col = objs['x'][i]*scale
 
         g1, g2 = ur(low=-0.01, high=0.01, size=2)
-        print('%d (%g, %g) %g' % (i, g1, g2, Tguess))
+        # print('%d (%g, %g) %g' % (i, g1, g2, Tguess))
 
         # our dbsim obs have jacobian "center" set to 0, 0
 
@@ -1982,209 +2090,19 @@ def get_guess_from_detect(objs, scale, ur, model):
     return gm_guess
 
 
-def test_descwl_fixcen_eachband(sim_config='dbsim.yaml',
-                                model='exp',
-                                nobj=None,
-                                ntrial=1,
-                                tol=1.0e-3,
-                                maxiter=40000,
-                                noise_factor=1,  # for low noise sim
-                                viewscale=0.0005,
-                                show=False,
-                                title=None,
-                                width=1000,
-                                seed=None):
-    """
-    true positions, ngauss related to T
-    """
-    import time
-    import sep
-
-    print('seed:', seed)
-
-    rng = np.random.RandomState(seed)
-
-    sim = make_dbsim(
-        rng,
-        noise_factor=noise_factor,
-        sim_config=sim_config,
-    )
-
-    ur = rng.uniform
-
-    tm = 0.0
-    for trial in range(ntrial):
-        print('-'*70)
-        print('%d/%d' % (trial+1, ntrial))
-
-        sim.make_obs(nobj=nobj)
-        mbobs = sim.obs
-
-        imlist = [o[0].image for o in mbobs]
-        wtlist = [o[0].weight for o in mbobs]
-
-        # if show:
-        #     dbsim.visualize.view_mbobs(sim.obs, scale=viewscale)
-
-        for obslist in mbobs:
-            for obs in obslist:
-                do_psf_fit(obs.psf, rng)
-
-        # coadd over bands
-        coadd_obs = make_coadd_obs(mbobs)
-        do_psf_fit(coadd_obs.psf, rng)
-
-        noise = np.sqrt(1/coadd_obs.weight[0, 0])
-        objs, seg = sep.extract(
-            coadd_obs.image,
-            0.8,
-            err=noise,
-            deblend_cont=1.0e-5,
-            minarea=4,
-            filter_kernel=KERNEL,
-            segmentation_map=True,
-        )
-
-        print('found', objs.size, 'objects')
-        if objs.size == 0:
-            if show:
-                view_rgb(imlist, wtlist, viewscale)
-            break
-
-        tm0 = time.time()
-
-        byband_gm = []
-        for band, obslist in enumerate(mbobs):
-            obs = obslist[0]
-            imsky, sky = ngmix.em.prep_image(obs.image)
-            emobs = Observation(
-                imsky,
-                jacobian=obs.jacobian,
-                psf=obs.psf,
-            )
-
-            scale = obs.jacobian.scale
-            for itry in range(2):
-                gm_guess = get_guess_from_detect(
-                    objs,
-                    scale,
-                    ur,
-                    model,
-                )
-
-                em = GMixEMFixCen(emobs)
-                em.go(gm_guess, sky, maxiter=maxiter, tol=tol)
-
-                res = em.get_result()
-                if res['flags'] == 0:
-                    break
-
-            print(res)
-            if res['flags'] != 0:
-                break
-
-            gmfit = em.get_gmix()
-            byband_gm.append(gmfit)
-
-        if res['flags'] != 0:
-            break
-            if show:
-                view_rgb(imlist, wtlist, viewscale)
-            continue
-
-        byband_pars = []
-        byband_imlist = []
-        byband_wtlist = []
-        difflist = []
-        chi2 = 0.0
-
-        for band, obslist in enumerate(mbobs):
-            obs = obslist[0]
-
-            bgm = byband_gm[band].copy()
-
-            em_convolve_1gauss(
-                bgm.get_data(),
-                obs.psf.gmix.get_data(),
-                fix=True,
-            )
-
-            bim = bgm.make_image(
-                obs.image.shape,
-                jacobian=obs.jacobian,
-            )
-
-            bflux_tot, bflux_tot_err = get_flux(
-                obs.image,
-                obs.weight,
-                bim,
-            )
-
-            bgm.set_flux(bflux_tot*obs.jacobian.scale**2)
-            bim = bgm.make_image(
-                obs.image.shape,
-                jacobian=obs.jacobian,
-            )
-
-            byband_pars.append(bgm.get_full_pars())
-            byband_imlist.append(bim)
-            byband_wtlist.append(obs.weight)
-
-            tdiff = obs.image - bim
-            difflist.append(tdiff)
-            chi2 += (tdiff**2 * obs.weight).sum()
-
-        this_tm = time.time() - tm0
-        print('this time:', tm)
-        tm += this_tm
-
-        if show:
-            # rgb = dbsim.visualize.make_rgb(
-            #     mbobs,
-            #     scale=viewscale,
-            # )
-            rgb = make_rgb(imlist, wtlist, scale=viewscale)
-
-            tmp_modlist = []
-            for i in range(len(wtlist)):
-                tnoise = np.sqrt(1/wtlist[i][0, 0])
-                tmpim = byband_imlist[i].copy()
-                tmpim += rng.normal(scale=tnoise, size=tmpim.shape)
-                tmp_modlist.append(tmpim)
-            model_rgb_noisy = make_rgb(
-                tmp_modlist,
-                byband_wtlist,
-                scale=viewscale,
-            )
-            model_rgb = make_rgb(byband_imlist, byband_wtlist, scale=viewscale)
-
-            diff_rgb = make_rgb(difflist, byband_wtlist, scale=viewscale)
-
-            compare_rgb_images(rgb, model_rgb, model_rgb_noisy,
-                               diff_rgb, seg, width, chi2,
-                               title=title)
-
-        if ntrial > 1 and show:
-            if input('enter a key, q to quit: ') == 'q':
-                return
-
-    print('total time:', tm)
-    print('time per:', tm/ntrial)
-
-
-def test_descwl_fixcen_fromcoadd(sim_config='dbsim.yaml',
-                                 det_method='sep',
-                                 model='exp',
-                                 nobj=None,
-                                 ntrial=1,
-                                 tol=1.0e-3,
-                                 maxiter=40000,
-                                 noise_factor=1,  # for low noise sim
-                                 viewscale=0.0005,
-                                 show=False,
-                                 title=None,
-                                 width=1000,
-                                 seed=None):
+def test_descwl_fixcen(sim_config='dbsim.yaml',
+                       det_method='sep',
+                       model='exp',
+                       nobj=None,
+                       ntrial=1,
+                       tol=1.0e-3,
+                       maxiter=40000,
+                       noise_factor=1,  # for low noise sim
+                       viewscale=0.0005,
+                       show=False,
+                       title=None,
+                       width=1000,
+                       seed=None):
     """
     true positions, ngauss related to T
     """
@@ -2261,8 +2179,8 @@ def test_descwl_fixcen_fromcoadd(sim_config='dbsim.yaml',
                 ur,
                 model,
             )
-            print('guess:')
-            print(gm_guess)
+            # print('guess:')
+            # print(gm_guess)
 
             em = GMixEMFixCen(emobs)
             em.go(gm_guess, sky, maxiter=maxiter, tol=tol)
@@ -2278,8 +2196,8 @@ def test_descwl_fixcen_fromcoadd(sim_config='dbsim.yaml',
 
         # this gmix is the pre-seeing one
         gmfit = em.get_gmix()
-        print('best fit')
-        print(gmfit)
+        # print('best fit')
+        # print(gmfit)
 
         print('results')
         print(res)
@@ -4052,7 +3970,6 @@ def test_multi_sep_ps(nobj=4,
     print('time:', tm)
 
     if show:
-        import images
 
         tab = compare_images(
             im,
