@@ -2476,6 +2476,7 @@ def test_real(min_fofsize=2,
     true positions, ngauss related to T
     """
     import time
+    tm0 = time.time()
 
     print('seed:', seed)
     rng = np.random.RandomState(seed)
@@ -2521,11 +2522,15 @@ def test_real(min_fofsize=2,
         print('-'*70)
         print('FoF group %d/%d' % (ifof+1, nfofs))
 
+        this_time = 0.0
+
         i = wlarge[ifof]
         indices = rev[rev[i]:rev[i+1]]
 
         # fof_objs = objs[indices]
-        fofid = fofs['fofid'][indices[0]]
+        # fofid = fofs['fofid'][indices[0]]
+
+        this_tm0 = time.time()
 
         numbers = indices + 1
         fof_mbobs, fof_seg, fof_objs = get_fof_mbobs_and_objs(
@@ -2542,6 +2547,8 @@ def test_real(min_fofsize=2,
         fof_coadd_obs = make_coadd_obs(fof_mbobs)
         do_psf_fit(fof_coadd_obs.psf, rng)
 
+        this_time += time.time() - this_tm0
+
         show_fofs(
             fof_mbobs,
             fof_objs,
@@ -2551,7 +2558,7 @@ def test_real(min_fofsize=2,
             width=width,
         )
 
-        tm0 = time.time()
+        this_tm0 = time.time()
 
         imsky, sky = ngmix.em.prep_image(fof_coadd_obs.image)
         emobs = Observation(
@@ -2676,9 +2683,10 @@ def test_real(min_fofsize=2,
             difflist.append(tdiff)
             chi2 += (tdiff**2 * obs.weight).sum()
 
-        this_tm = time.time() - tm0
-        print('this time:', tm)
-        tm += this_tm
+        this_time += time.time() - this_tm0
+        tm += this_time
+
+        print('this time:', this_time)
 
         if show:
             rgb = make_rgb(imlist, wtlist, scale=viewscale)
