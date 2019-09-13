@@ -5,3 +5,6 @@ from . import procflags
 from .shredding import Shredder
 from . import sim
 from . import vis
+from . import guesses
+from .guesses import get_guess_from_cat
+from . import psf_fitting
