@@ -26,7 +26,8 @@ DEFAULT_CONFIG = {
         'bulge_sizefrac_range': [0.1, 0.5],
         'bulge_angle_offet_range': [-30, 30],  # degrees
 
-        'disk_color': [1.25, 1.0, 1.0/1.25],
+        'disk_color': [1.0, 1.0, 1.0],
+        # 'disk_color': [1.25, 1.0, 1.0/1.25],
         # 'disk_color': [1.25, 1.0, 0.75],
         'bulge_color': [0.35, 1.0, 1.0/0.35],
         # 'bulge_color': [0.5, 1.0, 1.5],
@@ -61,7 +62,7 @@ class Sim(dict):
         """
         iconf = self['image']
 
-        band_images = self._get_noisy_images()
+        band_images, shifts = self._get_noisy_images()
         band_weights = [
             image*0 + 1.0/iconf['noise']**2 for image in band_images
         ]
@@ -74,7 +75,7 @@ class Sim(dict):
 
         mbobs = ngmix.MultiBandObsList()
 
-        for image, weight in zip(band_images, band_weights):
+        for image, weight, shift in zip(band_images, band_weights, shifts):
             obs = ngmix.Observation(
                 image,
                 weight=weight,
@@ -85,6 +86,8 @@ class Sim(dict):
             obslist.append(obs)
             mbobs.append(obslist)
 
+        centers = self._get_centers(obs, shifts)
+        mbobs.meta['centers'] = centers
         return mbobs
 
     def get_psf(self):
@@ -99,11 +102,32 @@ class Sim(dict):
         """
         return self._psf_obs.copy()
 
+    def _get_centers(self, obs, shifts):
+        """
+        get the true centers for each simulated object
+        """
+        dt = [
+            ('row', 'f4'), ('col', 'f4'),
+        ]
+        centers = np.zeros(self['objects']['nobj'], dtype=dt)
+
+        ccen = (np.array(obs.image.shape)-1)/2
+
+        scale = self['image']['pixel_scale']
+        for i, shift in enumerate(shifts):
+            row = ccen[0] + shift[1]/scale
+            col = ccen[1] + shift[0]/scale
+
+            centers['row'][i] = row
+            centers['col'][i] = col
+
+        return centers
+
     def _get_noisy_images(self):
         """
         get noisy images for each band
         """
-        band_images = self._get_images()
+        band_images, shifts = self._get_images()
 
         for image in band_images:
             noise = self.rng.normal(
@@ -112,7 +136,7 @@ class Sim(dict):
             )
             image += noise
 
-        return band_images
+        return band_images, shifts
 
     def _get_images(self):
         """
@@ -123,11 +147,13 @@ class Sim(dict):
         gmodels = []
         rmodels = []
         imodels = []
+        shifts = []
         for i in range(self['objects']['nobj']):
-            band_models = self._get_convolved_models()
+            band_models, shift = self._get_convolved_models()
             gmodels.append(band_models[0])
             rmodels.append(band_models[1])
             imodels.append(band_models[2])
+            shifts.append(shift)
 
         band_models = [
             galsim.Add(gmodels),
@@ -148,14 +174,14 @@ class Sim(dict):
 
             band_images.append(image)
 
-        return band_images
+        return band_images, shifts
 
     def _get_convolved_models(self):
         """
         get models convolved by the psf for each band
         """
         import galsim
-        band_models0 = self._get_models()
+        band_models0, shift = self._get_models()
 
         band_models = []
         for model0 in band_models0:
@@ -165,7 +191,7 @@ class Sim(dict):
             )
             band_models.append(model)
 
-        return band_models
+        return band_models, shift
 
     def _get_models(self):
         """
@@ -246,7 +272,7 @@ class Sim(dict):
         rmodel = galsim.Add(rdisk, rbulge)
         imodel = galsim.Add(idisk, ibulge)
 
-        return gmodel, rmodel, imodel
+        return (gmodel, rmodel, imodel), shift
 
     def _get_shift(self):
         """
