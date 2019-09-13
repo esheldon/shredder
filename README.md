@@ -3,7 +3,8 @@ An astronomical image deblender
 
 ## Examples
 
-An example using the built-in simulation
+An example using the built-in simulation. Required galsim to be installed
+
 ```python
 import numpy as np
 import shredder
@@ -35,10 +36,12 @@ gm_guess = shredder.get_guess_from_cat(
 s = shredder.Shredder(mbobs, rng=rng)
 s.shred(gm_guess)
 
-# result contains the best fit mixture for each band
+# result contains the best fit mixture for each band and information
+# about the processing
 res = s.get_result()
+assert res['flags'] == 0
 
-# if you ahve installed the optional packags you can view
+# if you have installed the optional packags you can view
 # the comparison of model and data
 s.plot_comparison(show=True)
 ```

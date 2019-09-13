@@ -36,6 +36,9 @@ def test_shredder_smoke(seed, show=False):
     s = shredder.Shredder(mbobs, rng=rng)
     s.shred(gm_guess)
 
+    res = s.get_result()
+    assert res['flags'] == 0
+
     if show:
         s.plot_comparison(show=True)
 
@@ -71,6 +74,9 @@ def test_shredder(seed):
 
     s = shredder.Shredder(mbobs, rng=rng)
     s.shred(gm_guess)
+
+    res = s.get_result()
+    assert res['flags'] == 0
 
     models = s.get_model_images()
 
