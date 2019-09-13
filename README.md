@@ -1,10 +1,6 @@
 # Shredder
 An astronomical image deblender
 
-# Deblend On Real Data
-
-![Example From DES](https://raw.githubusercontent.com/esheldon/shredder/master/data/example-blend01.png)
-
 ## Examples
 
 An example using the built-in simulation. Required galsim to be installed
@@ -54,6 +50,10 @@ assert res['flags'] == 0
 # the comparison of model and data
 s.plot_comparison(show=True)
 ```
+
+## Deblend On Real Data
+
+![Example From DES](https://raw.githubusercontent.com/esheldon/shredder/master/data/example-blend01.png)
 
 ## Requirements
 
