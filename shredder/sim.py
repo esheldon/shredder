@@ -47,9 +47,9 @@ class Sim(dict):
 
         self.rng = rng
 
-        if config is None:
-            self.update(DEFAULT_CONFIG)
-        else:
+        self.update(DEFAULT_CONFIG)
+
+        if config is not None:
             self.update(config)
 
         self._set_psf()

@@ -3,7 +3,8 @@ An astronomical image deblender
 
 ## Examples
 
-An example using the built-in simulation. Required galsim to be installed
+An example using the built-in simulation.  This example requires galsim to be
+installed.
 
 ```python
 import numpy as np
