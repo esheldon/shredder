@@ -1,6 +1,10 @@
 # Shredder
 An astronomical image deblender
 
+# Deblend On Real Data
+
+![Example From DES](https://raw.githubusercontent.com/esheldon/shredder/master/data/example-blend01.png)
+
 ## Examples
 
 An example using the built-in simulation. Required galsim to be installed
