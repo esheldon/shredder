@@ -3,12 +3,12 @@ import ngmix
 
 DEFAULT_CONFIG = {
     'image': {
-        'dim_pixels': 50,
+        'dim_pixels': 100,
         'noise': 0.1,
         'pixel_scale': 0.263,
     },
     'positions': {
-        'width_pixels': 35,
+        'width_pixels': 50,
     },
     'psf': {
         'model': 'moffat',
@@ -16,10 +16,21 @@ DEFAULT_CONFIG = {
         'beta': 3.5,
     },
     'objects': {
-        'hlr_range': [0.1, 1.5],
-        'flux_range': [50, 150],
-        'disk_color': [1.25, 1.0, 0.75],
-        'bulge_color': [0.5, 1.0, 1.5],
+        'nobj': 5,
+        'fracdev_range': [0.0, 1.0],
+
+        'hlr_range': [0.01, 1.5],
+        # 'flux_range': [0.1, 300.0],
+        'flux_range': 'track_hlr',
+
+        'bulge_sizefrac_range': [0.1, 0.5],
+        'bulge_angle_offet_range': [-30, 30],  # degrees
+
+        'disk_color': [1.25, 1.0, 1.0/1.25],
+        # 'disk_color': [1.25, 1.0, 0.75],
+        'bulge_color': [0.35, 1.0, 1.0/0.35],
+        # 'bulge_color': [0.5, 1.0, 1.5],
+
         'gsigma': 0.2,
     },
 }
@@ -107,10 +118,25 @@ class Sim(dict):
         """
         get images without noise for each band
         """
-        band_models = self._get_convolved_models()
+        import galsim
+
+        gmodels = []
+        rmodels = []
+        imodels = []
+        for i in range(self['objects']['nobj']):
+            band_models = self._get_convolved_models()
+            gmodels.append(band_models[0])
+            rmodels.append(band_models[1])
+            imodels.append(band_models[2])
+
+        band_models = [
+            galsim.Add(gmodels),
+            galsim.Add(rmodels),
+            galsim.Add(imodels),
+        ]
 
         iconf = self['image']
-        ny, nx = iconf['dims']
+        ny, nx = [iconf['dim_pixels']]*2
 
         band_images = []
         for model in band_models:
@@ -148,31 +174,59 @@ class Sim(dict):
         import galsim
         rng = self.rng
 
-        o = self['object']
+        o = self['objects']
         shift = self._get_shift()
 
-        fracdev = rng.uniform(low=0, high=1)
-        bulge_sizefrac = rng.uniform(low=0.5, high=1)
+        fracdev = rng.uniform(
+            low=o['fracdev_range'][0],
+            high=o['fracdev_range'][1],
+        )
 
-        g1bulge, g2bulge = self.gpdf.sample2d()
+        disk_hlr = rng.uniform(
+            low=o['hlr_range'][0],
+            high=o['hlr_range'][1],
+        )
+
+        bulge_sizefrac = rng.uniform(
+            low=o['bulge_sizefrac_range'][0],
+            high=o['bulge_sizefrac_range'][1],
+        )
+        bulge_hlr = disk_hlr*bulge_sizefrac
+
+        if o['flux_range'] == 'track_hlr':
+            flux = disk_hlr**2 * 100
+        else:
+            flux = rng.uniform(
+                low=o['flux_range'][0],
+                high=o['flux_range'][1],
+            )
+
         g1disk, g2disk = self.gpdf.sample2d()
 
+        bulge_angle_offset = rng.uniform(
+                low=o['bulge_angle_offet_range'][0],
+                high=o['bulge_angle_offet_range'][1],
+        )
+        bulge_angle_offset = np.deg2rad(bulge_angle_offset)
+        disk_shape = ngmix.Shape(g1disk, g2disk)
+        bulge_shape = disk_shape.get_rotated(bulge_angle_offset)
+
         disk = galsim.Exponential(
-            half_light_radius=o['hlr'],
-            flux=(1-fracdev)*o['flux'],
+            half_light_radius=disk_hlr,
+            flux=(1-fracdev)*flux,
         ).shear(
-            g1=g1disk,
-            g2=g2disk,
+            g1=disk_shape.g1,
+            g2=disk_shape.g2,
         ).shift(
             *shift,
         )
 
         bulge = galsim.DeVaucouleurs(
-            half_light_radius=o['hlr']*bulge_sizefrac,
-            flux=fracdev*o['flux'],
+            half_light_radius=bulge_hlr,
+            flux=fracdev*flux,
         ).shear(
-            g1=g1bulge,
-            g2=g2bulge,
+            g1=bulge_shape.g1,
+            g2=bulge_shape.g2,
         ).shift(
             *shift,
         )
@@ -202,12 +256,13 @@ class Sim(dict):
         rng = self.rng
 
         iconf = self['image']
+        pconf = self['positions']
 
-        radius = iconf['width_pixels']/2 * iconf['pixel_scale']
+        radius = pconf['width_pixels']/2 * iconf['pixel_scale']
 
         return rng.uniform(
             low=-radius,
-            high=-radius,
+            high=+radius,
             size=2,
         )
 
@@ -254,3 +309,23 @@ class Sim(dict):
             psf_weight,
             jacobian=jac,
         )
+
+
+def test(ntrial=1, seed=None, show=False, scale=2):
+    """
+    quick test viewing an example sim
+    """
+    from . import vis
+
+    rng = np.random.RandomState(seed)
+    sim = Sim(rng)
+
+    for i in range(ntrial):
+        mbobs = sim()
+
+        if show:
+            vis.view_mbobs(mbobs, scale, show=show)
+            if 'q' == input('hit a key (q to quit): '):
+                break
+
+    return mbobs
