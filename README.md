@@ -16,23 +16,28 @@ mbobs = sim()
 
 scale = sim['image']['pixel_scale']
 
+# make a guess based on the true centers and
+# arbitrary sizes
+
 centers = mbobs.meta['centers']
 add_dt = [('T', 'f8')]
 objs = eu.numpy_util.add_fields(centers, add_dt)
 
-# fake size guesses
+# arbitrary sizes
 objs['T'] = rng.uniform(
     low=2.0*scale**2,
     high=4.0*scale**2,
     size=objs.size,
 )
 
+# generate guesses from the catalog
 gm_guess = shredder.get_guess_from_cat(
     objs,
     pixel_scale=scale,
     rng=rng,
 )
 
+# run the deblender
 s = shredder.Shredder(mbobs, rng=rng)
 s.shred(gm_guess)
 
