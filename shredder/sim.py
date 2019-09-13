@@ -41,7 +41,10 @@ class Sim(dict):
     """
     simple sim to generate objects scattered about an image
     """
-    def __init__(self, rng, config=None):
+    def __init__(self, rng=None, config=None):
+        if rng is None:
+            rng = np.random.RandomState()
+
         self.rng = rng
 
         if config is None:

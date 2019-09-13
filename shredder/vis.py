@@ -23,7 +23,7 @@ def compare_mbobs_and_models(mbobs,
                              width=1000,
                              rng=None,
                              title=None,
-                             scale=0.2,
+                             scale=2,
                              show=False):
     """
     generate rgb images for data and model and make

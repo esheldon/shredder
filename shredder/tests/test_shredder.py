@@ -10,7 +10,7 @@ def test_shredder_smoke(seed, show=False):
     test we can run end to end
     """
     rng = np.random.RandomState(seed)
-    sim = shredder.sim.Sim(rng)
+    sim = shredder.sim.Sim(rng=rng)
     mbobs = sim()
 
     scale = sim['image']['pixel_scale']
@@ -37,7 +37,7 @@ def test_shredder_smoke(seed, show=False):
     s.shred(gm_guess)
 
     if show:
-        s.view_comparison(scale=2, show=True)
+        s.plot_comparison(show=True)
 
 
 @pytest.mark.parametrize('seed', [125, 871])
@@ -46,7 +46,7 @@ def test_shredder(seed):
     test that the fit is pretty good
     """
     rng = np.random.RandomState(seed)
-    sim = shredder.sim.Sim(rng)
+    sim = shredder.sim.Sim(rng=rng)
     mbobs = sim()
 
     scale = sim['image']['pixel_scale']

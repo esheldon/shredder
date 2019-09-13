@@ -90,12 +90,12 @@ class Shredder(object):
         jacob = self.mbobs[band][0].jacobian
         return gm.make_image(dims, jacobian=jacob)
 
-    def view_comparison(self, **kw):
+    def plot_comparison(self, **kw):
         """
         visualize a comparison of the model and data
         """
         models = self.get_model_images()
-        vis.compare_mbobs_and_models(
+        return vis.compare_mbobs_and_models(
             self.mbobs,
             models,
             **kw
