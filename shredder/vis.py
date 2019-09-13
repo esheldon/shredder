@@ -201,7 +201,7 @@ def plot_seg(segin, title=None, width=1000, rng=None, show=False):
 
     if show:
         srat = seg.shape[1]/seg.shape[0]
-        fname = '/tmp/seg.png'
+        fname = tempfile.mktemp(suffix='.png')
         plt.write_img(width, width*srat, fname)
         show_image(fname)
 
