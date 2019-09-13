@@ -9,6 +9,8 @@ from .em import (
 )
 from . import procflags
 from . import coadding
+from . import vis
+from .psf_fitting import do_psf_fit
 
 logger = logging.getLogger(__name__)
 
@@ -41,9 +43,12 @@ class Shredder(object):
 
         # TODO deal with Observation input, which would only use
         # the "coadd" result and would not actually coadd
+
         self.mbobs = mbobs
+        do_psf_fit(self.mbobs)
 
         self.coadd_obs = coadding.make_coadd_obs(mbobs)
+        do_psf_fit(self.coadd_obs)
 
         self.miniter = miniter
         self.maxiter = maxiter
@@ -61,6 +66,40 @@ class Shredder(object):
         if not hasattr(self, '_result'):
             raise RuntimeError('run shred() first')
         return self._result
+
+    def get_model_images(self):
+        """
+        get a list of model images for all bands
+        """
+        imlist = []
+
+        for band in range(len(self.mbobs)):
+            image = self.get_model_image(band=band)
+            imlist.append(image)
+        return imlist
+
+    def get_model_image(self, band=None):
+        """
+        get a model image for the specified band
+        """
+
+        res = self.get_result()
+        gm = res['band_results'][band]['gmix_convolved']
+
+        dims = self.mbobs[band][0].image.shape
+        jacob = self.mbobs[band][0].jacobian
+        return gm.make_image(dims, jacobian=jacob)
+
+    def view_comparison(self, **kw):
+        """
+        visualize a comparison of the model and data
+        """
+        models = self.get_model_images()
+        vis.compare_mbobs_and_models(
+            self.mbobs,
+            models,
+            **kw
+        )
 
     def shred(self, gmix_guess):
         """
@@ -83,6 +122,8 @@ class Shredder(object):
 
         cres = em_coadd.get_result()
         res['coadd_result'] = cres
+        res['coadd_fitter'] = em_coadd
+
         res['flags'] != cres['flags']
 
         if cres['flags'] != 0 and cres['flags'] & EM_MAXITER == 0:
@@ -126,11 +167,14 @@ class Shredder(object):
         res = self._result
 
         reslist = []
+        fitters = []
 
         for band, obslist in enumerate(self.mbobs):
             obs = obslist[0]
 
             em = self._get_band_fit(obs)
+            fitters.append(em)
+
             bres = em.get_result()
 
             logger.debug('band %d: %s' % (band, repr(bres)))
@@ -144,6 +188,7 @@ class Shredder(object):
             reslist.append(bres)
 
         res['band_results'] = reslist
+        res['band_fitters'] = fitters
 
     def _get_band_fit(self, obs):
         """
@@ -153,7 +198,11 @@ class Shredder(object):
         coadd_res = self._result['coadd_result']
 
         imsky, _ = ngmix.em.prep_image(obs.image)
-        emobs = ngmix.Observation(imsky, jacobian=obs.jacobian)
+        emobs = ngmix.Observation(
+            imsky,
+            jacobian=obs.jacobian,
+            psf=obs.psf,
+        )
         em = GMixEMPOnly(
             emobs,
             miniter=self.miniter,
@@ -190,9 +239,14 @@ class Shredder(object):
             obs.weight,
             bim,
         )
-        gm.set_flux(flux*obs.jacobian.scale**2)
+
+        flux = flux*obs.jacobian.scale**2
+        flux_err = flux_err*obs.jacobian.scale**2
+        gm.set_flux(flux)
+        gm_convolved.set_flux(flux)
 
         res['gmix'] = gm
+        res['gmix_convolved'] = gm_convolved
         res['total_flux'] = flux
         res['total_flux_err'] = flux
 
