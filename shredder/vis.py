@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import tempfile
 
 
 def view_mbobs(mbobs, scale, show=False):
@@ -16,64 +17,112 @@ def view_mbobs(mbobs, scale, show=False):
     return plt
 
 
-def compare_rgb_images(image, model, diffim,
-                       seg, width, chi2,
+def compare_mbobs_and_models(mbobs,
+                             models,
+                             seg=None,
+                             width=1000,
+                             rng=None,
+                             title=None,
+                             scale=0.2,
+                             show=False):
+    """
+    generate rgb images for data and model and make
+    a comparison plot
+    """
+    imlist = [olist[0].image for olist in mbobs]
+    wtlist = [olist[0].weight for olist in mbobs]
+
+    difflist = []
+    chi2 = 0.0
+
+    for im, wt, model in zip(imlist, wtlist, models):
+        diffim = im - model
+        difflist.append(diffim)
+        chi2 += (diffim**2 * wt).sum()
+
+    rgb = make_rgb(
+        imlist,
+        wtlist,
+        scale=scale,
+    )
+    model_rgb = make_rgb(
+        models,
+        wtlist,
+        scale=scale,
+    )
+    diff_rgb = make_rgb(
+        difflist,
+        wtlist,
+        scale=scale,
+    )
+
+    return compare_rgb_images(
+        rgb,
+        model_rgb,
+        diff_rgb,
+        seg=seg,
+        width=width,
+        chi2=chi2,
+        rng=rng,
+        title=title,
+        show=show,
+    )
+
+
+def compare_rgb_images(image,
+                       model,
+                       diffim,
+                       seg=None,
+                       width=1000,
+                       chi2=None,
                        rng=None,
                        title=None,
-                       model_noisy=None):
+                       show=False):
     """
     make a comparison of the image with the model
     """
     import biggles
     import images
 
-    dof = image.size-3
-    chi2per = chi2/dof
-
-    if model_noisy is not None:
-        arat = 2.0/3.0
-        tab = biggles.Table(2, 3, aspect_ratio=arat)
+    if chi2 is not None:
+        dof = image.size-3
+        chi2per = chi2/dof
+        diff_title = 'chi2/dof: %.2f' % chi2per
     else:
-        arat = image.shape[1]/image.shape[0]
-        tab = biggles.Table(2, 2, aspect_ratio=arat)
+        diff_title = None
+
+    arat = image.shape[1]/image.shape[0]
+    tab = biggles.Table(2, 2, aspect_ratio=arat)
 
     tab[0, 0] = images.view(
         image,  # /maxval,
         show=False,
         title='image',
     )
-    if model_noisy is not None:
-        tab[0, 1] = images.view(
-            model_noisy,  # /maxval,
-            show=False,
-            title='model+noise',
-        )
-        tab[0, 2] = images.view(
-            model,  # /maxval,
-            show=False,
-            title='model',
-        )
-    else:
-        tab[0, 1] = images.view(
-            model,  # /maxval,
-            show=False,
-            title='model',
-        )
+    tab[0, 1] = images.view(
+        model,  # /maxval,
+        show=False,
+        title='model',
+    )
 
     tab[1, 0] = images.view(
         diffim,
         show=False,
-        title='chi2/dof: %.2f' % chi2per,
+        title=diff_title,
     )
 
-    tab[1, 1] = plot_seg(seg, rng=rng, width=width, title='seg')
+    if seg is not None:
+        tab[1, 1] = plot_seg(seg, rng=rng, width=width, title='seg')
 
     if title is not None:
         tab.title = title
 
-    fname = '/tmp/tmp-comp.png'
-    tab.write_img(width, width*arat, fname)
-    show_image(fname)
+    if show:
+        fname = tempfile.mktemp(suffix='.png')
+        tab.write_img(width, width*arat, fname)
+        show_image(fname)
+
+    return tab
 
 
 def show_image(fname):
