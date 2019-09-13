@@ -51,7 +51,7 @@ assert res['flags'] == 0
 s.plot_comparison(show=True)
 ```
 
-## Deblend On Real Data
+## Deblend Example On Real Data
 
 Example deblending an image from the Dark Energy Survey.  There
 are 48 objects included in the blend.  The total time to run
