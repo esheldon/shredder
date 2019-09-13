@@ -53,6 +53,10 @@ s.plot_comparison(show=True)
 
 ## Deblend On Real Data
 
+Example deblending an image from the Dark Energy Survey.  There
+are 48 objects included in the blend.  The total time to run
+was 35 seconds.
+
 ![Example From DES](https://raw.githubusercontent.com/esheldon/shredder/master/data/example-blend01.png)
 
 ## Requirements
