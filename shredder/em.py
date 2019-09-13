@@ -72,7 +72,7 @@ class GMixEMFixCen(object):
         gm = self.get_gmix().copy()
         em_convolve_1gauss(
             gm.get_data(),
-            self.obs.psf.gmix.get_data(),
+            self._obs.psf.gmix.get_data(),
         )
         return gm
 
@@ -123,7 +123,7 @@ class GMixEMFixCen(object):
 
         flags = 0
         try:
-            numiter, fdiff, sky = em_run_fixcen(
+            numiter, fdiff, sky = self._runner(
                 conf,
                 obs.pixels,
                 sums,
@@ -523,7 +523,7 @@ def em_run_ponly(conf, pixels, sums, gmix, gmix_psf):
             if frac_diff < tol:
                 break
 
-        p_last = psum
+            p_last = psum
 
     numiter = i+1
 
