@@ -5,11 +5,11 @@ import ngmix
 logger = logging.getLogger(__name__)
 
 
-def get_guess_from_cat(objs,
-                       jacobian=None,
-                       pixel_scale=1.0,
-                       model='dev',
-                       rng=None):
+def get_guess(objs,
+              jacobian=None,
+              pixel_scale=1.0,
+              model='dev',
+              rng=None):
     """
     get a full gaussian mixture guess based on an input object list
 
