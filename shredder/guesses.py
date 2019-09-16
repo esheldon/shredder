@@ -97,7 +97,7 @@ def get_guess_from_cat(objs,
             gm_model = ngmix.GMixModel(pars, model)
 
         logger.debug('gm model guess')
-        logger.debug('%s' % str(gm_model))
+        logger.debug('\n%s' % str(gm_model))
 
         # perturb the models
         data = gm_model.get_data()

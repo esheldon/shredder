@@ -386,15 +386,12 @@ def gmix_set_from_sums_fixcen(gmix, gmix_psf, sums):
     psf_irr = gmix_psf['irr'][0]
     psf_irc = gmix_psf['irc'][0]
     psf_icc = gmix_psf['icc'][0]
-    print('psf')
-    print(gmix_psf)
 
     n_gauss = gmix.size
     for i in range(n_gauss):
 
         tsums = sums[i]
         gauss = gmix[i]
-        print(gauss)
 
         p = tsums['pnew']
         pinv = 1.0/p
