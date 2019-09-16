@@ -1,8 +1,15 @@
+import logging
 import numpy as np
 import ngmix
 
+logger = logging.getLogger(__name__)
 
-def get_guess_from_cat(objs, pixel_scale=1.0, model='dev', rng=None):
+
+def get_guess_from_cat(objs,
+                       jacobian=None,
+                       pixel_scale=1.0,
+                       model='dev',
+                       rng=None):
     """
     get a full gaussian mixture guess based on an input object list
 
@@ -40,6 +47,12 @@ def get_guess_from_cat(objs, pixel_scale=1.0, model='dev', rng=None):
             Tguess = (x2 + y2)*pixel_scale**2
             row = objs['y'][i]*pixel_scale
             col = objs['x'][i]*pixel_scale
+
+        if jacobian is not None:
+            row, col = jacobian.get_vu(row, col)
+        else:
+            row = row*pixel_scale
+            col = col*pixel_scale
 
         g1, g2 = ur(low=-0.01, high=0.01, size=2)
 
@@ -83,8 +96,9 @@ def get_guess_from_cat(objs, pixel_scale=1.0, model='dev', rng=None):
             ]
             gm_model = ngmix.GMixModel(pars, model)
 
-        # print('gm model guess')
-        # print(gm_model)
+        logger.debug('gm model guess')
+        logger.debug('%s' % str(gm_model))
+
         # perturb the models
         data = gm_model.get_data()
         for j in range(data.size):

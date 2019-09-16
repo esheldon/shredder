@@ -1,4 +1,7 @@
+import logging
 import ngmix
+
+logger = logging.getLogger(__name__)
 
 
 def do_psf_fit(obs, rng=None):
@@ -47,3 +50,6 @@ def do_psf_fit(obs, rng=None):
 
         gmix = fitter.get_gmix()
         psf_obs.set_gmix(gmix)
+
+        logger.debug('psf fit:')
+        logger.debug('%s' % str(gmix))

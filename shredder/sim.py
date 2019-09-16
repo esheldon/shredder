@@ -5,7 +5,8 @@ DEFAULT_CONFIG = {
     'image': {
         'dim_pixels': 100,
         'noise': 0.1,
-        'pixel_scale': 0.263,
+        # 'pixel_scale': 0.263,
+        'pixel_scale': 0.26227,  # to match example wcs in shredx
     },
     'positions': {
         'width_pixels': 50,
