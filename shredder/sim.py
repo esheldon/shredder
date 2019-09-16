@@ -353,7 +353,7 @@ def test(ntrial=1, seed=None, show=False, scale=2):
         mbobs = sim()
 
         if show:
-            vis.view_mbobs(mbobs, scale, show=show)
+            vis.view_mbobs(mbobs, scale=scale, show=show)
             if 'q' == input('hit a key (q to quit): '):
                 break
 

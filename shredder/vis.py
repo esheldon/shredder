@@ -3,14 +3,22 @@ import numpy as np
 import tempfile
 
 
-def view_mbobs(mbobs, scale, show=False):
+def view_mbobs(mbobs, scale=2, show=False):
     """
     make a color image of the MultiBandObsList
     """
-    import images
 
     imlist = [olist[0].image for olist in mbobs]
     wtlist = [olist[0].weight for olist in mbobs]
+
+    return view_rgb(imlist, wtlist, scale=scale, show=show)
+
+
+def view_rgb(imlist, wtlist, scale=2, show=False):
+    """
+    view rgb data
+    """
+    import images
 
     rgb = make_rgb(imlist, wtlist, scale=scale)
     plt = images.view(rgb, show=show)
