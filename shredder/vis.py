@@ -43,10 +43,25 @@ def compare_mbobs_and_models(mbobs,
     difflist = []
     chi2 = 0.0
 
+    npix = 0
+    wtall = None
     for im, wt, model in zip(imlist, wtlist, models):
+
+        if wtall is None:
+            wtall = wt.copy()
+        else:
+            wtall *= wt
+
         diffim = im - model
+
         difflist.append(diffim)
         chi2 += (diffim**2 * wt).sum()
+
+        wbad = np.where(wt <= 0.0)
+        npix += im.size - wbad[0].size
+
+    dof = npix-3
+    chi2per = chi2/dof
 
     rgb = make_rgb(
         imlist,
@@ -69,8 +84,9 @@ def compare_mbobs_and_models(mbobs,
         model_rgb,
         diff_rgb,
         seg=seg,
+        weight=wtall,
         width=width,
-        chi2=chi2,
+        chi2per=chi2per,
         rng=rng,
         title=title,
         show=show,
@@ -81,8 +97,9 @@ def compare_rgb_images(image,
                        model,
                        diffim,
                        seg=None,
+                       weight=None,
                        width=1000,
-                       chi2=None,
+                       chi2per=None,
                        rng=None,
                        title=None,
                        show=False):
@@ -92,9 +109,7 @@ def compare_rgb_images(image,
     import biggles
     import images
 
-    if chi2 is not None:
-        dof = image.size-3
-        chi2per = chi2/dof
+    if chi2per is not None:
         diff_title = 'chi2/dof: %.2f' % chi2per
     else:
         diff_title = None
@@ -121,6 +136,8 @@ def compare_rgb_images(image,
 
     if seg is not None:
         tab[1, 1] = plot_seg(seg, rng=rng, width=width, title='seg')
+    elif weight is not None:
+        tab[1, 1] = images.view(weight, show=False, tilte='weight')
 
     if title is not None:
         tab.title = title

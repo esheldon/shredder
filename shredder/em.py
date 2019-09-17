@@ -10,6 +10,8 @@ from ngmix.gmix_nb import (
     gauss2d_set,
     gmix_set_norms,
     gauss2d_set_norm,
+    gmix_eval_pixel_fast,
+    # gmix_eval_pixel,
     GMIX_LOW_DETVAL,
 )
 from ngmix.fastexp import expd
@@ -121,14 +123,22 @@ class GMixEMFixCen(object):
 
         sums = self._make_sums(len(gm))
 
+        pixels = obs.pixels.copy()
+
+        if np.any(pixels['ierr'] <= 0.0):
+            fill_zero_weight = True
+        else:
+            fill_zero_weight = False
+
         flags = 0
         try:
             numiter, fdiff, sky = self._runner(
                 conf,
-                obs.pixels,
+                pixels,
                 sums,
                 gm.get_data(),
                 gmix_psf.get_data(),
+                fill_zero_weight=fill_zero_weight,
             )
 
             pars = gm.get_full_pars()
@@ -215,7 +225,116 @@ class GMixEMPOnly(GMixEMFixCen):
 
 
 @njit
-def em_run_fixcen(conf, pixels, sums, gmix, gmix_psf):
+def em_run_fixcen(conf, pixels, sums, gmix, gmix_psf, fill_zero_weight=False):
+    """
+    run the EM algorithm, with fixed positions and a psf mixture to provide a
+    shapred minimim resolution
+
+    Parameters
+    ----------
+    conf: array
+        Should have fields
+
+            tol: tolerance for stopping
+            sky_guess: guess for the sky
+            counts: counts in the image
+            miniter: minimum number of iterations
+            maxiter: maximum number of iterations
+            pixel_scale: pixel scale
+
+    pixels: pixel array
+        for the image/jacobian
+    gmix: gaussian mixture
+        Initialized to the starting guess
+    sums: array with fields
+        The sums array, a type _sums_dtype_fixcen
+    gmix: gauss2d array
+        The initial mixture.  The final result is also stored in this array.
+    gmix_psf: gauss2d array
+        Single gaussian psf
+    """
+
+    em_convolve_1gauss(gmix, gmix_psf)
+    gmix_set_norms(gmix)
+
+    tol = conf['tol']
+    counts = conf['counts']
+
+    pix_area = conf['pixel_scale']*conf['pixel_scale']
+    area = pixels.size*pix_area
+
+    # fraction of the flux that is in the sky
+    frac_sky = conf['sky_guess']*pixels.size/counts
+
+    # nsky = conf['sky_guess']/counts  # /pix_area
+    nsky = frac_sky * pix_area
+    nsky_orig = nsky
+
+    # implies sky ~ frac_sky/pixels.size*counts
+    #             = nsky/pix_area/pixels.size*counts
+
+    elogL_last = -9999.9e9
+
+    for i in range(conf['maxiter']):
+
+        elogL = 0.0
+        skysum = 0.0
+
+        clear_sums_fixcen(sums)
+        set_logtau_logdet(gmix, sums)
+
+        if fill_zero_weight:
+            # skyval = nsky/pix_area/pixels.size*counts
+            # frac_sky = nsky/pix_area
+            # skyval = frac_sky/pixels.size*counts
+            # print('skyval_orig:', conf['sky_guess'], 'skyval:', skyval)
+            skyval = conf['sky_guess']
+            counts_data = counts - conf['sky_guess']*pixels.size
+            fill_zero_weight_pixels(gmix, pixels, skyval,
+                                    counts_data*pix_area)
+
+        for pixel in pixels:
+
+            gtot, tlogL = do_scratch_sums_fixcen(pixel, gmix, sums)
+
+            elogL += tlogL
+
+            gtot += nsky
+            if gtot == 0.0:
+                raise GMixRangeError('gtot == 0')
+
+            imnorm = pixel['val']/counts
+            skysum += nsky*imnorm/gtot
+            igrat = imnorm/gtot
+
+            # multiply sums by igrat, among other things
+            do_sums_fixcen(sums, igrat)
+
+        gmix_set_from_sums_fixcen(gmix, gmix_psf, sums)
+
+        nsky = skysum/area
+
+        if i > conf['miniter']:
+            frac_diff = abs((elogL - elogL_last)/elogL)
+            if frac_diff < tol:
+                break
+
+        elogL_last = elogL
+
+    numiter = i+1
+
+    # sky = psky*(counts/area)
+
+    em_deconvolve_1gauss(gmix, gmix_psf)
+    gmix['norm_set'][:] = 0
+
+    return numiter, frac_diff, nsky*counts
+    # return numiter, frac_diff, sky
+
+
+@njit
+def em_run_fixcen_orig(conf, pixels, sums, gmix, gmix_psf,
+                       fill_zero_weight=False):
     """
     run the EM algorithm, with fixed positions and a psf mixture to provide a
     shapred minimim resolution
@@ -254,6 +373,8 @@ def em_run_fixcen(conf, pixels, sums, gmix, gmix_psf):
 
     nsky = conf['sky_guess']/counts
     psky = conf['sky_guess']/(counts/area)
+    psky_orig = psky
+    nsky_orig = nsky
 
     elogL_last = -9999.9e9
 
@@ -264,6 +385,9 @@ def em_run_fixcen(conf, pixels, sums, gmix, gmix_psf):
 
         clear_sums_fixcen(sums)
         set_logtau_logdet(gmix, sums)
+
+        if fill_zero_weight:
+            fill_zero_weight_pixels(gmix, pixels, conf['sky_guess'])
 
         for pixel in pixels:
 
@@ -287,6 +411,9 @@ def em_run_fixcen(conf, pixels, sums, gmix, gmix_psf):
         psky = skysum
         nsky = psky/area
 
+        print('psky_orig:', psky_orig, 'psky:', psky,
+              'nsky_orig:', nsky_orig, 'nsky:', nsky)
+
         if i > conf['miniter']:
             frac_diff = abs((elogL - elogL_last)/elogL)
             if frac_diff < tol:
@@ -296,12 +423,33 @@ def em_run_fixcen(conf, pixels, sums, gmix, gmix_psf):
 
     numiter = i+1
 
-    sky = psky*(counts/area)
+    # sky = psky*(counts/area)
 
     em_deconvolve_1gauss(gmix, gmix_psf)
     gmix['norm_set'][:] = 0
 
-    return numiter, frac_diff, sky
+    return numiter, frac_diff, nsky*counts
+    # return numiter, frac_diff, sky
+
+
+@njit
+def fill_zero_weight_pixels(gmix, pixels, sky, counts):
+    """
+    fill zero weight pixels with the model
+    """
+
+    psum = gmix['p'].sum()
+
+    for pixel in pixels:
+        if pixel['ierr'] <= 0.0:
+            val = gmix_eval_pixel_fast(gmix, pixel)
+            val = val*counts/psum
+
+            pixel['val'] = sky + val
+            # pixel['val'] = sky + gmix_eval_pixel_fast(gmix, pixel)
+
+            # pixel['val'] = gmix_eval_pixel(gmix, pixel)
+            # print('filled:', pixel['val'])
 
 
 @njit
@@ -453,7 +601,7 @@ def clear_sums_fixcen(sums):
 
 
 @njit
-def em_run_ponly(conf, pixels, sums, gmix, gmix_psf):
+def em_run_ponly(conf, pixels, sums, gmix, gmix_psf, fill_zero_weight=False):
     """
     run the EM algorithm, allowing only fluxes to vary
 
@@ -487,14 +635,26 @@ def em_run_ponly(conf, pixels, sums, gmix, gmix_psf):
     tol = conf['tol']
     counts = conf['counts']
 
-    area = pixels.size*conf['pixel_scale']*conf['pixel_scale']
+    pix_area = conf['pixel_scale']*conf['pixel_scale']
+    area = pixels.size*pix_area
 
-    nsky = conf['sky_guess']/counts
-    psky = conf['sky_guess']/(counts/area)
+    frac_sky = conf['sky_guess']*pixels.size/counts
+    nsky = frac_sky * pix_area
 
     for i in range(conf['maxiter']):
         skysum = 0.0
         clear_sums_ponly(sums)
+
+        if fill_zero_weight:
+            # skyval = nsky/pix_area/pixels.size*counts
+            # frac_sky = nsky/pix_area
+            # skyval = frac_sky/pixels.size*counts
+            # print('skyval_orig:', conf['sky_guess'], 'skyval:', skyval)
+
+            skyval = conf['sky_guess']
+            counts_data = counts - conf['sky_guess']*pixels.size
+            fill_zero_weight_pixels(gmix, pixels, skyval,
+                                    counts_data*pix_area)
 
         for pixel in pixels:
 
@@ -514,8 +674,7 @@ def em_run_ponly(conf, pixels, sums, gmix, gmix_psf):
 
         gmix_set_from_sums_ponly(gmix, sums)
 
-        psky = skysum
-        nsky = psky/area
+        nsky = skysum/area
 
         if i > conf['miniter']:
             psum = gmix['p'].sum()
@@ -527,12 +686,11 @@ def em_run_ponly(conf, pixels, sums, gmix, gmix_psf):
 
     numiter = i+1
 
-    sky = psky*(counts/area)
-
     em_deconvolve_1gauss(gmix, gmix_psf)
     gmix['norm_set'][:] = 0
 
-    return numiter, frac_diff, sky
+    return numiter, frac_diff, nsky*counts
+    # return numiter, frac_diff, sky
 
 
 @njit

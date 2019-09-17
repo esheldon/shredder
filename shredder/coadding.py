@@ -2,7 +2,7 @@ import numpy as np
 import ngmix
 
 
-def make_coadd_obs(mbobs):
+def make_coadd_obs(mbobs, ignore_zero_weight=True):
     """
     perform a simple coadd assuming the images all already align
 
@@ -45,13 +45,15 @@ def make_coadd_obs(mbobs):
         weight=coadd_psf_weight,
         jacobian=mbobs[0][0].psf.jacobian,
     )
+
     obs = ngmix.Observation(
         coadd_image,
         weight=coadd_weight,
         jacobian=mbobs[0][0].jacobian,
         psf=psf_obs,
+        ignore_zero_weight=ignore_zero_weight,
     )
 
-    import images
-    images.view(coadd_weight, title='weight')
+    # import images
+    # images.view(coadd_weight, title='weight')
     return obs

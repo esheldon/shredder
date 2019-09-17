@@ -20,6 +20,7 @@ class Shredder(object):
                  mbobs,
                  miniter=10,
                  maxiter=1000,
+                 fill_zero_weight=False,
                  tol=0.001,
                  rng=None):
         """
@@ -44,10 +45,18 @@ class Shredder(object):
         # TODO deal with Observation input, which would only use
         # the "coadd" result and would not actually coadd
 
+        if fill_zero_weight:
+            self._ignore_zero_weight = False
+        else:
+            self._ignore_zero_weight = True
+
         self.mbobs = mbobs
         do_psf_fit(self.mbobs)
 
-        self.coadd_obs = coadding.make_coadd_obs(mbobs)
+        self.coadd_obs = coadding.make_coadd_obs(
+            mbobs,
+            ignore_zero_weight=self._ignore_zero_weight,
+        )
         do_psf_fit(self.coadd_obs)
 
         self.miniter = miniter
@@ -145,8 +154,10 @@ class Shredder(object):
 
         emobs = ngmix.Observation(
             imsky,
+            weight=coadd_obs.weight,
             jacobian=coadd_obs.jacobian,
             psf=coadd_obs.psf,
+            ignore_zero_weight=self._ignore_zero_weight,
         )
 
         em = GMixEMFixCen(
@@ -195,13 +206,13 @@ class Shredder(object):
         get the flux-only fit for a band
         """
 
-        coadd_res = self._result['coadd_result']
-
-        imsky, _ = ngmix.em.prep_image(obs.image)
+        imsky, sky = ngmix.em.prep_image(obs.image)
         emobs = ngmix.Observation(
             imsky,
+            weight=obs.weight,
             jacobian=obs.jacobian,
             psf=obs.psf,
+            ignore_zero_weight=self._ignore_zero_weight,
         )
         em = GMixEMPOnly(
             emobs,
@@ -212,7 +223,7 @@ class Shredder(object):
 
         gm_guess = self._get_band_guess()
 
-        use_sky = coadd_res['sky']
+        use_sky = sky
         em.go(gm_guess, use_sky)
 
         return em
@@ -265,6 +276,44 @@ class Shredder(object):
             gdata['p'][idata] *= (1.0 + rnum)
 
         return gmix_guess
+
+
+def get_flux_fill(im, wt, model_in):
+    """
+    use the input model as a template and infer the total
+    flux
+
+    Parameters
+    ----------
+    im: array
+        The data image
+    wt: array
+        The data weight map
+    model: array
+        The input model image
+
+    Returns
+    -------
+    flux, flux_err.  Estimates of the total flux and uncertainty
+    """
+
+    flux, flux_err = get_flux(im, wt, model_in)
+    print('first pass:', flux, flux_err)
+
+    wbad = np.where(wt <= 0.0)
+    if wbad[0].size > 0:
+        imfill = im.copy()
+        wtfill = wt.copy()
+
+        modfill = model_in.copy()
+        modfill[:, :] *= flux
+        imfill[wbad] = modfill[wbad]
+        wtfill[wbad] = wt.max()
+
+        flux, flux_err = get_flux(imfill, wtfill, model_in)
+        print('second pass:', flux, flux_err)
+
+    return flux, flux_err
 
 
 def get_flux(im, wt, model_in):

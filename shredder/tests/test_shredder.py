@@ -97,14 +97,17 @@ def test_shredder(seed):
 
 
 @pytest.mark.parametrize('seed', [9731, 7317])
-def test_shredder_bad_column(seed, show=False):
+def test_shredder_bad_columns(seed, show=False):
     """
     test with bad column
     """
+
+    print('seed:', seed)
+
     rng = np.random.RandomState(seed)
     sim = shredder.sim.Sim(rng=rng)
 
-    sim['image']['bad_column'] = True
+    sim['image']['bad_columns'] = True
     mbobs = sim()
 
     scale = sim['image']['pixel_scale']
@@ -127,11 +130,27 @@ def test_shredder_bad_column(seed, show=False):
         rng=rng,
     )
 
-    s = shredder.Shredder(mbobs, rng=rng)
-    s.shred(gm_guess)
+    for fill_zero_weight in [False, True]:
+        s = shredder.Shredder(
+            mbobs, rng=rng, fill_zero_weight=fill_zero_weight,
+            tol=1.0e-4,
+        )
+        s.shred(gm_guess)
 
-    res = s.get_result()
-    assert res['flags'] == 0
+        res = s.get_result()
+        assert res['flags'] == 0
+        cres = res['coadd_result']
+        print(cres['numiter'], cres['fdiff'])
+        for bres in res['band_results']:
+            print(bres['numiter'], bres['fdiff'])
 
-    if show:
-        s.plot_comparison(show=True)
+        if show:
+            title = 'fill: %s' % fill_zero_weight
+            s.plot_comparison(show=True, title=title)
+
+
+if __name__ == '__main__':
+    # seed = 15575
+    seed = 278
+    # seed = np.random.randint(0, 2**10)
+    test_shredder_bad_columns(seed, show=True)

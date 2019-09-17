@@ -8,7 +8,7 @@ DEFAULT_CONFIG = {
         'noise': 0.1,
         # 'pixel_scale': 0.263,
         'pixel_scale': 0.26227,  # to match example wcs in shredx
-        'bad_column': False,
+        'bad_columns': False,
     },
     'positions': {
         'width_pixels': 50,
@@ -40,6 +40,13 @@ DEFAULT_CONFIG = {
 }
 
 
+def get_default_config():
+    """
+    get a copy of the default config
+    """
+    return copy.deepcopy(DEFAULT_CONFIG)
+
+
 class Sim(dict):
     """
     simple sim to generate objects scattered about an image
@@ -50,7 +57,7 @@ class Sim(dict):
 
         self.rng = rng
 
-        dconf = copy.deepcopy(DEFAULT_CONFIG)
+        dconf = get_default_config()
         self.update(dconf)
 
         if config is not None:
@@ -85,6 +92,7 @@ class Sim(dict):
                 weight=weight,
                 jacobian=jacobian,
                 psf=self.get_psf_obs(),
+                ignore_zero_weight=False,
             )
             obslist = ngmix.ObsList()
             obslist.append(obs)
@@ -135,13 +143,14 @@ class Sim(dict):
 
         band_weights = []
         for image in band_images:
+            weight = self._get_weight_and_badpix(image)
+            band_weights.append(weight)
+
             noise = self.rng.normal(
                 size=image.shape,
                 scale=self['image']['noise'],
             )
             image += noise
-            weight = self._get_weight_and_badpix(image)
-            band_weights.append(weight)
 
         return band_images, band_weights, shifts
 
@@ -157,11 +166,12 @@ class Sim(dict):
         weight = np.zeros(dims)
         weight[:, :] = 1.0/iconf['noise']**2
 
-        if iconf['bad_column']:
+        if iconf['bad_columns']:
             badcol = self.rng.randint(0, dims[1])
             weight[:, badcol] = 0
-            # image[:, badcol] = -9999.0
             image[:, badcol] = 0.0
+            # weight[:, badcol-1:badcol+2] = 0
+            # image[:, badcol-1:badcol+2] = 0
 
         return weight
 
