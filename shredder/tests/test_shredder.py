@@ -26,7 +26,7 @@ def test_shredder_smoke(seed, show=False):
         size=objs.size,
     )
 
-    gm_guess = shredder.get_guess_from_cat(
+    gm_guess = shredder.get_guess(
         objs,
         jacobian=mbobs[0][0].jacobian,
         model='dev',
@@ -65,7 +65,7 @@ def test_shredder(seed):
         size=objs.size,
     )
 
-    gm_guess = shredder.get_guess_from_cat(
+    gm_guess = shredder.get_guess(
         objs,
         jacobian=mbobs[0][0].jacobian,
         model='dev',
