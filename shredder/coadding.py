@@ -32,6 +32,11 @@ def make_coadd_obs(mbobs):
 
     for i, obslist in enumerate(mbobs):
         obs = obslist[0]
+
+        wbad = np.where(obs.weight <= 0.0)
+        if wbad[0].size > 0:
+            coadd_weight[wbad] = 0.0
+
         coadd_image += obs.image*nweights[i]
         coadd_psf += obs.psf.image*nweights[i]
 
@@ -47,4 +52,6 @@ def make_coadd_obs(mbobs):
         psf=psf_obs,
     )
 
+    import images
+    images.view(coadd_weight, title='weight')
     return obs
