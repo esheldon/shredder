@@ -94,3 +94,44 @@ def test_shredder(seed):
     chi2per = chi2/dof
 
     assert chi2per < 1.05
+
+
+@pytest.mark.parametrize('seed', [9731, 7317])
+def test_shredder_bad_column(seed, show=False):
+    """
+    test with bad column
+    """
+    rng = np.random.RandomState(seed)
+    sim = shredder.sim.Sim(rng=rng)
+
+    sim['image']['bad_column'] = True
+    mbobs = sim()
+
+    scale = sim['image']['pixel_scale']
+
+    centers = mbobs.meta['centers']
+    add_dt = [('T', 'f8')]
+    objs = eu.numpy_util.add_fields(centers, add_dt)
+
+    # fake size guesses
+    objs['T'] = rng.uniform(
+        low=2.0*scale**2,
+        high=4.0*scale**2,
+        size=objs.size,
+    )
+
+    gm_guess = shredder.get_guess(
+        objs,
+        jacobian=mbobs[0][0].jacobian,
+        model='dev',
+        rng=rng,
+    )
+
+    s = shredder.Shredder(mbobs, rng=rng)
+    s.shred(gm_guess)
+
+    res = s.get_result()
+    assert res['flags'] == 0
+
+    if show:
+        s.plot_comparison(show=True)
