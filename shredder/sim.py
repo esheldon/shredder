@@ -1,5 +1,6 @@
 import numpy as np
 import ngmix
+import copy
 
 DEFAULT_CONFIG = {
     'image': {
@@ -7,6 +8,7 @@ DEFAULT_CONFIG = {
         'noise': 0.1,
         # 'pixel_scale': 0.263,
         'pixel_scale': 0.26227,  # to match example wcs in shredx
+        'bad_column': False,
     },
     'positions': {
         'width_pixels': 50,
@@ -48,7 +50,8 @@ class Sim(dict):
 
         self.rng = rng
 
-        self.update(DEFAULT_CONFIG)
+        dconf = copy.deepcopy(DEFAULT_CONFIG)
+        self.update(dconf)
 
         if config is not None:
             self.update(config)
@@ -66,10 +69,7 @@ class Sim(dict):
         """
         iconf = self['image']
 
-        band_images, shifts = self._get_noisy_images()
-        band_weights = [
-            image*0 + 1.0/iconf['noise']**2 for image in band_images
-        ]
+        band_images, band_weights, shifts = self._get_noisy_images()
 
         jacobian = ngmix.DiagonalJacobian(
             row=0,
@@ -133,14 +133,37 @@ class Sim(dict):
         """
         band_images, shifts = self._get_images()
 
+        band_weights = []
         for image in band_images:
             noise = self.rng.normal(
                 size=image.shape,
                 scale=self['image']['noise'],
             )
             image += noise
+            weight = self._get_weight_and_badpix(image)
+            band_weights.append(weight)
 
-        return band_images, shifts
+        return band_images, band_weights, shifts
+
+    def _get_weight_and_badpix(self, image):
+        """
+        get a weight image.  Mark some of the pixels to
+        have zero weight
+        """
+
+        iconf = self['image']
+
+        dims = [iconf['dim_pixels']]*2
+        weight = np.zeros(dims)
+        weight[:, :] = 1.0/iconf['noise']**2
+
+        if iconf['bad_column']:
+            badcol = self.rng.randint(0, dims[1])
+            weight[:, badcol] = 0
+            # image[:, badcol] = -9999.0
+            image[:, badcol] = 0.0
+
+        return weight
 
     def _get_images(self):
         """
