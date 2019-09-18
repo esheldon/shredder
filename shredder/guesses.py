@@ -17,8 +17,9 @@ def get_guess(objs,
     -----------
     objs: array
         Should have either
-            - row, col, T in arcsec^2
-            - x, y, x2, y2 all in pixels
+            - row, col in pixels, T in arcsec^2 and flux in surface brightness
+              TODO may want to make row, col in arcsec
+            - x, y, x2, y2 all in pixel units and flux in flux units
     pixel_scale: float
         The pixel scale, default 1
     model: string, optional
@@ -33,20 +34,25 @@ def get_guess(objs,
     else:
         ur = rng.uniform
 
-    nobj = objs.size
+    if jacobian is not None:
+        scale = jacobian.scale
 
     guess_pars = []
     for i in range(objs.size):
         if 'T' in objs.dtype.names:
-            Tguess = objs['T'][i]  # *scale**2
-            row = objs['row'][i]*pixel_scale
-            col = objs['col'][i]*pixel_scale
+            Tguess = objs['T'][i]  # *pixel_scale**2
+            row = objs['row'][i]
+            col = objs['col'][i]
+            flux = objs['flux'][i] # *pixel_scale**2
         else:
             x2 = objs['x2'][i]
             y2 = objs['y2'][i]
             Tguess = (x2 + y2)*pixel_scale**2
-            row = objs['y'][i]*pixel_scale
-            col = objs['x'][i]*pixel_scale
+
+            row = objs['y'][i]
+            col = objs['x'][i]
+
+            flux = objs['flux'][i]*pixel_scale**2
 
         if jacobian is not None:
             row, col = jacobian.get_vu(row, col)
@@ -67,7 +73,8 @@ def get_guess(objs,
                 g2,
                 Tguess,
                 fracdev,
-                1.0/nobj,
+                # 1.0/nobj,
+                flux,
             ]
             gm_model = ngmix.GMixBDF(pars=pars)
         elif model == 'bd':
@@ -81,7 +88,8 @@ def get_guess(objs,
                 Tguess,
                 logTratio,
                 fracdev,
-                1.0/nobj,
+                # 1.0/nobj,
+                flux,
             ]
             gm_model = ngmix.GMixModel(pars, model)
 
@@ -92,7 +100,8 @@ def get_guess(objs,
                 g1,
                 g2,
                 Tguess,
-                1.0/nobj,
+                # 1.0/nobj,
+                flux,
             ]
             gm_model = ngmix.GMixModel(pars, model)
 
