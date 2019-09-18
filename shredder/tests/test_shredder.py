@@ -149,7 +149,8 @@ def test_shredder_bad_columns(seed, show=False):
 
 
 if __name__ == '__main__':
-    # seed = 15575
-    seed = 278
+    seed = 15575
+    # seed = 278
     # seed = np.random.randint(0, 2**10)
-    test_shredder_bad_columns(seed, show=True)
+    # test_shredder_bad_columns(seed, show=True)
+    test_shredder_smoke(seed, show=True)

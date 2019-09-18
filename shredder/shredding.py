@@ -207,6 +207,7 @@ class Shredder(object):
         """
 
         imsky, sky = ngmix.em.prep_image(obs.image)
+
         emobs = ngmix.Observation(
             imsky,
             weight=obs.weight,
@@ -223,8 +224,7 @@ class Shredder(object):
 
         gm_guess = self._get_band_guess()
 
-        use_sky = sky
-        em.go(gm_guess, use_sky)
+        em.go(gm_guess, sky)
 
         return em
 
@@ -251,10 +251,16 @@ class Shredder(object):
             bim,
         )
 
-        flux = flux*obs.jacobian.scale**2
-        flux_err = flux_err*obs.jacobian.scale**2
-        gm.set_flux(flux)
-        gm_convolved.set_flux(flux)
+        scale = obs.jacobian.scale
+
+        flux = flux*scale**2
+        flux_err = flux_err*scale**2
+        gmflux = gm.get_flux()
+        print('em flux:', gmflux, 'flux:', flux)
+        # gm.set_flux(flux)
+        # gm_convolved.set_flux(flux)
+        # gm.set_flux(gmflux*scale**2)
+        # gm_convolved.set_flux(gmflux*scale**2)
 
         res['gmix'] = gm
         res['gmix_convolved'] = gm_convolved

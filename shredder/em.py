@@ -37,20 +37,22 @@ class GMixEMFixCen(object):
     tol: number, optional
         The tolerance in the moments that implies convergence,
         default 0.001
+    vary_sky: bool
+        If True, fit for the sky level
     """
     def __init__(self,
                  obs,
                  miniter=10,
                  maxiter=1000,
-                 tol=0.001):
+                 tol=0.001,
+                 vary_sky=False):
 
         self._obs = obs
 
         self.miniter = miniter
         self.maxiter = maxiter
         self.tol = tol
-
-        self._counts = obs.image.sum()
+        self.vary_sky = vary_sky
 
         self._gm = None
         self._sums = None
@@ -84,19 +86,16 @@ class GMixEMFixCen(object):
         """
         return self._result
 
-    def make_image(self, counts=None):
+    def make_image(self):
         """
         Get an image of the best fit mixture
         """
-        im = self._gm.make_image(
+        return self._gm.make_image(
             self._obs.image.shape,
             jacobian=self._obs.jacobian,
         )
-        if counts is not None:
-            im *= (counts/im.sum())
-        return im
 
-    def go(self, gmix_guess, sky_guess):
+    def go(self, gmix_guess, sky):
         """
         Run the em algorithm from the input starting guesses
 
@@ -105,8 +104,8 @@ class GMixEMFixCen(object):
         gmix_guess: GMix
             A gaussian mixture (GMix or child class) representing a starting
             guess for the algorithm.  This should be *before* psf convolution.
-        sky_guess: number
-            A guess at the sky value
+        sky: number
+            The sky value added to the image
         """
 
         if hasattr(self, '_gm'):
@@ -116,8 +115,7 @@ class GMixEMFixCen(object):
         gmix_psf = obs.psf.gmix
 
         conf = self._make_conf()
-        conf['sky_guess'] = sky_guess
-        conf['counts'] = self._counts
+        conf['sky'] = sky
 
         gm = gmix_guess.copy()
 
@@ -185,6 +183,7 @@ class GMixEMFixCen(object):
         conf['miniter'] = self.miniter
         conf['maxiter'] = self.maxiter
         conf['pixel_scale'] = self._obs.jacobian.scale
+        conf['vary_sky'] = self.vary_sky
 
         return conf
 
@@ -236,11 +235,11 @@ def em_run_fixcen(conf, pixels, sums, gmix, gmix_psf, fill_zero_weight=False):
         Should have fields
 
             tol: tolerance for stopping
-            sky_guess: guess for the sky
-            counts: counts in the image
             miniter: minimum number of iterations
             maxiter: maximum number of iterations
             pixel_scale: pixel scale
+            sky: the sky, or guess for sky if fitting for it
+            vary_sky: True if fitting for the sky
 
     pixels: pixel array
         for the image/jacobian
@@ -258,20 +257,11 @@ def em_run_fixcen(conf, pixels, sums, gmix, gmix_psf, fill_zero_weight=False):
     gmix_set_norms(gmix)
 
     tol = conf['tol']
-    counts = conf['counts']
 
     pix_area = conf['pixel_scale']*conf['pixel_scale']
-    area = pixels.size*pix_area
+    npix = pixels.size
 
-    # fraction of the flux that is in the sky
-    frac_sky = conf['sky_guess']*pixels.size/counts
-
-    # nsky = conf['sky_guess']/counts  # /pix_area
-    nsky = frac_sky * pix_area
-    nsky_orig = nsky
-
-    # implies sky ~ frac_sky/pixels.size*counts
-    #             = nsky/pix_area/pixels.size*counts
+    sky = conf['sky']
 
     elogL_last = -9999.9e9
 
@@ -284,35 +274,28 @@ def em_run_fixcen(conf, pixels, sums, gmix, gmix_psf, fill_zero_weight=False):
         set_logtau_logdet(gmix, sums)
 
         if fill_zero_weight:
-            # skyval = nsky/pix_area/pixels.size*counts
-            # frac_sky = nsky/pix_area
-            # skyval = frac_sky/pixels.size*counts
-            # print('skyval_orig:', conf['sky_guess'], 'skyval:', skyval)
-            skyval = conf['sky_guess']
-            counts_data = counts - conf['sky_guess']*pixels.size
-            fill_zero_weight_pixels(gmix, pixels, skyval,
-                                    counts_data*pix_area)
+            fill_zero_weight_pixels(gmix, pixels, sky)
 
         for pixel in pixels:
 
-            gtot, tlogL = do_scratch_sums_fixcen(pixel, gmix, sums)
+            gsum, tlogL = do_scratch_sums_fixcen(pixel, gmix, sums)
 
-            elogL += tlogL
-
-            gtot += nsky
+            gtot = gsum + sky
             if gtot == 0.0:
                 raise GMixRangeError('gtot == 0')
 
-            imnorm = pixel['val']/counts
-            skysum += nsky*imnorm/gtot
-            igrat = imnorm/gtot
+            elogL += tlogL
+
+            skysum += sky*pixel['val']/gtot
 
             # multiply sums by igrat, among other things
-            do_sums_fixcen(sums, igrat)
+            do_sums_fixcen(sums, pixel, gtot)
 
-        gmix_set_from_sums_fixcen(gmix, gmix_psf, sums)
+        gmix_set_from_sums_fixcen(gmix, gmix_psf, sums, pix_area)
 
-        nsky = skysum/area
+        if conf['vary_sky']:
+            sky = skysum/npix
+            # print('sky_orig:', conf['sky'], 'sky:', sky)
 
         if i > conf['miniter']:
             frac_diff = abs((elogL - elogL_last)/elogL)
@@ -323,13 +306,10 @@ def em_run_fixcen(conf, pixels, sums, gmix, gmix_psf, fill_zero_weight=False):
 
     numiter = i+1
 
-    # sky = psky*(counts/area)
-
     em_deconvolve_1gauss(gmix, gmix_psf)
     gmix['norm_set'][:] = 0
 
-    return numiter, frac_diff, nsky*counts
-    # return numiter, frac_diff, sky
+    return numiter, frac_diff, sky
 
 
 @njit
@@ -433,23 +413,15 @@ def em_run_fixcen_orig(conf, pixels, sums, gmix, gmix_psf,
 
 
 @njit
-def fill_zero_weight_pixels(gmix, pixels, sky, counts):
+def fill_zero_weight_pixels(gmix, pixels, sky):
     """
     fill zero weight pixels with the model
     """
 
-    psum = gmix['p'].sum()
-
     for pixel in pixels:
         if pixel['ierr'] <= 0.0:
             val = gmix_eval_pixel_fast(gmix, pixel)
-            val = val*counts/psum
-
             pixel['val'] = sky + val
-            # pixel['val'] = sky + gmix_eval_pixel_fast(gmix, pixel)
-
-            # pixel['val'] = gmix_eval_pixel(gmix, pixel)
-            # print('filled:', pixel['val'])
 
 
 @njit
@@ -458,7 +430,7 @@ def do_scratch_sums_fixcen(pixel, gmix, sums):
     do the basic sums for this pixel, using scratch space in the sums struct
     """
 
-    gtot = 0.0
+    gsum = 0.0
     logL = 0.0
 
     n_gauss = gmix.size
@@ -484,7 +456,7 @@ def do_scratch_sums_fixcen(pixel, gmix, sums):
         else:
             tsums['gi'] = 0.0
 
-        gtot += tsums['gi']
+        gsum += tsums['gi']
 
         tsums['tv2sum'] = v2*tsums['gi']
         tsums['tuvsum'] = uv*tsums['gi']
@@ -492,38 +464,38 @@ def do_scratch_sums_fixcen(pixel, gmix, sums):
 
         logL += tsums['gi']*(tsums['logtau'] - 0.5*tsums['logdet'] - 0.5*chi2)
 
-    if gtot == 0.0:
+    if gsum == 0.0:
         logL = 0.0
     else:
-        logL *= 1.0/gtot
+        logL *= 1.0/gsum
 
-    return gtot, logL
+    return gsum, logL
 
 
 @njit
-def do_sums_fixcen(sums, igrat):
+def do_sums_fixcen(sums, pixel, gtot):
     """
     do the sums based on the scratch values
     """
+
+    factor = pixel['val']/gtot
 
     n_gauss = sums.size
     for i in range(n_gauss):
         tsums = sums[i]
 
-        # wtau is gi[pix]/gtot[pix]*imnorm[pix]
-        # which is Dave's tau*imnorm = wtau
-        wtau = tsums['gi']*igrat
+        wtau = tsums['gi']*factor
 
         tsums['pnew'] += wtau
 
         # row*gi/gtot*imnorm
-        tsums['u2sum'] += tsums['tu2sum']*igrat
-        tsums['uvsum'] += tsums['tuvsum']*igrat
-        tsums['v2sum'] += tsums['tv2sum']*igrat
+        tsums['u2sum'] += tsums['tu2sum']*factor
+        tsums['uvsum'] += tsums['tuvsum']*factor
+        tsums['v2sum'] += tsums['tv2sum']*factor
 
 
 @njit
-def gmix_set_from_sums_fixcen(gmix, gmix_psf, sums):
+def gmix_set_from_sums_fixcen(gmix, gmix_psf, sums, pix_area):
     """
     fill the gaussian mixture from the em sums, requiring
     that the covariance matrix after psf deconvolution
@@ -557,9 +529,11 @@ def gmix_set_from_sums_fixcen(gmix, gmix_psf, sums):
             irr = icc = T/2
             irc = 0.0
 
+        # ngmix works in surface brightness, so multiply
+        # p by area since it has the actual image value in there
         gauss2d_set(
             gauss,
-            p,
+            p*pix_area,
             gauss['row'],
             gauss['col'],
             irr + psf_irr,
@@ -610,7 +584,88 @@ def em_run_ponly(conf, pixels, sums, gmix, gmix_psf, fill_zero_weight=False):
     conf: array
         Should have fields
             tol: tolerance for stopping
-            sky_guess: guess for the sky
+            miniter: minimum number of iterations
+            maxiter: maximum number of iterations
+            pixel_scale: pixel scale
+            sky: the sky, or guess for sky if fitting for it
+            vary_sky: True if fitting for the sky
+
+    pixels: pixel array
+        for the image/jacobian
+    sums: array with fields
+        The sums array, a type _sums_dtype_ponly
+    gmix: gauss2d array
+        The initial mixture.  The final result is also stored in this array.
+    gmix_psf: gauss2d array
+        Single gaussian psf
+    """
+
+    em_convolve_1gauss(gmix, gmix_psf)
+    gmix_set_norms(gmix)
+
+    tol = conf['tol']
+
+    pix_area = conf['pixel_scale']*conf['pixel_scale']
+    npix = pixels.size
+
+    sky = conf['sky']
+
+    p_last = gmix['p'].sum()
+
+    for i in range(conf['maxiter']):
+        skysum = 0.0
+        clear_sums_ponly(sums)
+
+        if fill_zero_weight:
+            fill_zero_weight_pixels(gmix, pixels, sky)
+
+        for pixel in pixels:
+
+            # this fills some fields of sums, as well as return
+            gsum = do_scratch_sums_ponly(pixel, gmix, sums)
+
+            gtot = gsum + sky
+            if gtot == 0.0:
+                raise GMixRangeError("gtot == 0")
+
+            skysum += sky*pixel['val']/gtot
+
+            do_sums_ponly(sums, pixel, gtot)
+
+        gmix_set_from_sums_ponly(gmix, sums, pix_area)
+
+        if conf['vary_sky']:
+            sky = skysum/npix
+            # print('sky_orig:', conf['sky'], 'sky:', sky)
+
+        if i > conf['miniter']:
+            psum = gmix['p'].sum()
+            frac_diff = abs(psum/p_last-1)
+            if frac_diff < tol:
+                break
+
+            p_last = psum
+
+    numiter = i+1
+
+    em_deconvolve_1gauss(gmix, gmix_psf)
+    gmix['norm_set'][:] = 0
+
+    return numiter, frac_diff, sky
+
+
+@njit
+def em_run_ponly_old(conf, pixels, sums, gmix, gmix_psf,
+                     fill_zero_weight=False):
+    """
+    run the EM algorithm, allowing only fluxes to vary
+
+    Parameters
+    ----------
+    conf: array
+        Should have fields
+            tol: tolerance for stopping
+            sky: guess for the sky
             counts: counts in the image
             miniter: minimum number of iterations
             maxiter: maximum number of iterations
@@ -641,6 +696,8 @@ def em_run_ponly(conf, pixels, sums, gmix, gmix_psf, fill_zero_weight=False):
     frac_sky = conf['sky_guess']*pixels.size/counts
     nsky = frac_sky * pix_area
 
+    counts_data = counts - conf['sky_guess']*pixels.size
+
     for i in range(conf['maxiter']):
         skysum = 0.0
         clear_sums_ponly(sums)
@@ -651,17 +708,32 @@ def em_run_ponly(conf, pixels, sums, gmix, gmix_psf, fill_zero_weight=False):
             # skyval = frac_sky/pixels.size*counts
             # print('skyval_orig:', conf['sky_guess'], 'skyval:', skyval)
 
-            skyval = conf['sky_guess']
-            counts_data = counts - conf['sky_guess']*pixels.size
-            fill_zero_weight_pixels(gmix, pixels, skyval,
-                                    counts_data*pix_area)
+            if i == 0:
+                skyval = conf['sky_guess']
+                flux = counts_data
+            else:
+                frac_sky = nsky/pix_area
+                skyval = frac_sky/pixels.size*counts
+                print('skyval_orig:', conf['sky_guess'], 'skyval:', skyval)
 
+            print('counts_data:', counts_data, 'flux:', flux)
+
+            # fill_zero_weight_pixels(gmix, pixels, skyval,
+            #                         counts_data*pix_area)
+            fill_zero_weight_pixels(gmix, pixels, skyval,
+                                    flux*pix_area)
+
+        gsum = g2sum = gIsum = 0.0
         for pixel in pixels:
 
             # this fills some fields of sums, as well as return
-            gtot = do_scratch_sums_ponly(pixel, gmix, sums)
+            tgsum, tg2sum, tgIsum = do_scratch_sums_ponly(pixel, gmix, sums)
 
-            gtot += nsky
+            gsum += tgsum
+            g2sum += tg2sum
+            gIsum += tgIsum
+
+            gtot = tgsum + nsky
             if gtot == 0.0:
                 raise GMixRangeError("gtot == 0")
 
@@ -675,6 +747,8 @@ def em_run_ponly(conf, pixels, sums, gmix, gmix_psf, fill_zero_weight=False):
         gmix_set_from_sums_ponly(gmix, sums)
 
         nsky = skysum/area
+
+        flux = get_flux(gsum, g2sum, gIsum)
 
         if i > conf['miniter']:
             psum = gmix['p'].sum()
@@ -700,7 +774,7 @@ def do_scratch_sums_ponly(pixel, gmix, sums):
     scratch space in the sums struct
     """
 
-    gtot = 0.0
+    gsum = 0.0
 
     n_gauss = gmix.size
     for i in range(n_gauss):
@@ -725,13 +799,31 @@ def do_scratch_sums_ponly(pixel, gmix, sums):
         else:
             tsums['gi'] = 0.0
 
-        gtot += tsums['gi']
+        gsum += tsums['gi']
 
-    return gtot
+    return gsum
 
 
 @njit
-def do_sums_ponly(sums, igrat):
+def do_sums_ponly(sums, pixel, gtot):
+    """
+    do the sums based on the scratch values
+    """
+
+    factor = pixel['val']/gtot
+
+    n_gauss = sums.size
+    for i in range(n_gauss):
+        tsums = sums[i]
+
+        # gi*image_val/sum(gi)
+        wtau = tsums['gi']*factor
+
+        tsums['pnew'] += wtau
+
+
+@njit
+def do_sums_ponly_old(sums, igrat):
     """
     do the sums based on the scratch values
     """
@@ -740,7 +832,7 @@ def do_sums_ponly(sums, igrat):
     for i in range(n_gauss):
         tsums = sums[i]
 
-        # wtau is gi[pix]/gtot[pix]*imnorm[pix]
+        # wtau is gi[pix]/sum(g)*im[pix]/sum(im)
         # which is Dave's tau*imnorm = wtau
         wtau = tsums['gi']*igrat
 
@@ -748,7 +840,7 @@ def do_sums_ponly(sums, igrat):
 
 
 @njit
-def gmix_set_from_sums_ponly(gmix, sums):
+def gmix_set_from_sums_ponly(gmix, sums, pix_area):
     """
     fill the gaussian mixture from the em sums
     """
@@ -759,7 +851,8 @@ def gmix_set_from_sums_ponly(gmix, sums):
         tsums = sums[i]
         gauss = gmix[i]
 
-        p = tsums['pnew']
+        # ngmix works in surface brightness
+        p = tsums['pnew']*pix_area
 
         gauss2d_set(
             gauss,
@@ -836,12 +929,20 @@ def em_deconvolve_1gauss(gmix, gmix_psf):
         )
 
 
+@njit
+def get_flux(gsum, g2sum, gIsum):
+    """
+    calculate the flux from the cross-correlation sums
+    """
+    return gsum*gIsum/g2sum
+
+
 _em_conf_dtype = [
     ('tol', 'f8'),
     ('maxiter', 'i4'),
     ('miniter', 'i4'),
-    ('sky_guess', 'f8'),
-    ('counts', 'f8'),
+    ('sky', 'f8'),
+    ('vary_sky', 'bool'),
     ('pixel_scale', 'f8'),
 ]
 _em_conf_dtype = np.dtype(_em_conf_dtype, align=True)
@@ -873,3 +974,12 @@ _sums_dtype_ponly = [
     ('pnew', 'f8'),
 ]
 _sums_dtype_ponly = np.dtype(_sums_dtype_ponly, align=True)
+
+"""
+_flux_sums_dtype = [
+    ('gsum', 'f8'),
+    ('g2sum', 'f8'),
+    ('gIsum', 'f8'),
+]
+_flux_sums_dtype = np.dtype(_flux_sums_dtype, align=True)
+"""
