@@ -1,5 +1,6 @@
 import numpy as np
 import ngmix
+import esutil as eu
 import copy
 
 DEFAULT_CONFIG = {
@@ -76,7 +77,7 @@ class Sim(dict):
         """
         iconf = self['image']
 
-        band_images, band_weights, shifts = self._get_noisy_images()
+        band_images, band_weights, obj_data = self._get_noisy_images()
 
         jacobian = ngmix.DiagonalJacobian(
             row=0,
@@ -86,7 +87,7 @@ class Sim(dict):
 
         mbobs = ngmix.MultiBandObsList()
 
-        for image, weight, shift in zip(band_images, band_weights, shifts):
+        for image, weight in zip(band_images, band_weights):
             obs = ngmix.Observation(
                 image,
                 weight=weight,
@@ -98,8 +99,8 @@ class Sim(dict):
             obslist.append(obs)
             mbobs.append(obslist)
 
-        centers = self._get_centers(obs, shifts)
-        mbobs.meta['centers'] = centers
+        obj_data_with_cen = self._set_centers(obs, obj_data)
+        mbobs.meta['obj_data'] = obj_data_with_cen
         return mbobs
 
     def get_psf(self):
@@ -114,32 +115,35 @@ class Sim(dict):
         """
         return self._psf_obs.copy()
 
-    def _get_centers(self, obs, shifts):
+    def _set_centers(self, obs, obj_data_in):
         """
         get the true centers for each simulated object
         """
-        dt = [
+        add_dt = [
             ('row', 'f4'), ('col', 'f4'),
         ]
-        centers = np.zeros(self['objects']['nobj'], dtype=dt)
+
+        obj_data = eu.numpy_util.add_fields(obj_data_in, add_dt)
 
         ccen = (np.array(obs.image.shape)-1)/2
 
         scale = self['image']['pixel_scale']
-        for i, shift in enumerate(shifts):
+
+        for i in range(obj_data.size):
+            shift = obj_data['shift'][i]
             row = ccen[0] + shift[1]/scale
             col = ccen[1] + shift[0]/scale
 
-            centers['row'][i] = row
-            centers['col'][i] = col
+            obj_data['row'][i] = row
+            obj_data['col'][i] = col
 
-        return centers
+        return obj_data
 
     def _get_noisy_images(self):
         """
         get noisy images for each band
         """
-        band_images, shifts = self._get_images()
+        band_images, obj_data = self._get_images()
 
         band_weights = []
         for image in band_images:
@@ -152,7 +156,7 @@ class Sim(dict):
             )
             image += noise
 
-        return band_images, band_weights, shifts
+        return band_images, band_weights, obj_data
 
     def _get_weight_and_badpix(self, image):
         """
@@ -184,13 +188,14 @@ class Sim(dict):
         gmodels = []
         rmodels = []
         imodels = []
-        shifts = []
+        odlist = []
         for i in range(self['objects']['nobj']):
-            band_models, shift = self._get_convolved_models()
+            band_models, odata = self._get_convolved_models()
             gmodels.append(band_models[0])
             rmodels.append(band_models[1])
             imodels.append(band_models[2])
-            shifts.append(shift)
+
+            odlist.append(odata)
 
         band_models = [
             galsim.Add(gmodels),
@@ -211,14 +216,15 @@ class Sim(dict):
 
             band_images.append(image)
 
-        return band_images, shifts
+        obj_data = eu.numpy_util.combine_arrlist(odlist)
+        return band_images, obj_data
 
     def _get_convolved_models(self):
         """
         get models convolved by the psf for each band
         """
         import galsim
-        band_models0, shift = self._get_models()
+        band_models0, obj_data = self._get_models()
 
         band_models = []
         for model0 in band_models0:
@@ -228,7 +234,7 @@ class Sim(dict):
             )
             band_models.append(model)
 
-        return band_models, shift
+        return band_models, obj_data
 
     def _get_models(self):
         """
@@ -309,7 +315,22 @@ class Sim(dict):
         rmodel = galsim.Add(rdisk, rbulge)
         imodel = galsim.Add(idisk, ibulge)
 
-        return (gmodel, rmodel, imodel), shift
+        obj_data = self._get_obj_data_struct()
+        obj_data['shift'] = shift
+        obj_data['flux'] = flux
+        obj_data['hlr'] = disk_hlr
+        return (gmodel, rmodel, imodel), obj_data
+
+    def _get_obj_data_struct(self):
+        """
+        struct to store some truth data
+        """
+        dt = [
+            ('shift', 'f4', 2),
+            ('flux', 'f4'),
+            ('hlr', 'f4'),
+        ]
+        return np.array(1, dtype=dt)
 
     def _get_shift(self):
         """
