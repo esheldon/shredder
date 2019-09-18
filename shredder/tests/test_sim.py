@@ -7,7 +7,7 @@ import pytest
 def test_sim_smoke(seed):
     rng = np.random.RandomState(seed)
     sim = shredder.sim.Sim(rng=rng)
-    mbobs = sim()  # noqa
+    sim()
 
 
 @pytest.mark.parametrize('seed', [75, 817, 213])
@@ -16,4 +16,4 @@ def test_sim(seed):
     sim = shredder.sim.Sim(rng=rng)
     mbobs = sim()
 
-    assert mbobs.meta['centers'].size == sim['objects']['nobj']
+    assert mbobs.meta['obj_data'].size == sim['objects']['nobj']
