@@ -306,8 +306,8 @@ def em_run_fixcen(conf, pixels, sums, gmix, gmix_psf, fill_zero_weight=False):
             # print('sky_orig:', conf['sky'], 'sky:', sky)
 
         numiter = i+1
-        if numiter > conf['miniter']:
-            frac_diff = abs((elogL - elogL_last)/elogL)
+        if numiter >= conf['miniter']:
+            frac_diff = (elogL - elogL_last)/elogL
             if frac_diff < tol:
                 break
 
@@ -549,7 +549,7 @@ def em_run_ponly(conf, pixels, sums, gmix, gmix_psf, fill_zero_weight=False):
         psum = gmix['p'].sum()
 
         numiter = i+1
-        if numiter > conf['miniter']:
+        if numiter >= conf['miniter']:
             frac_diff = abs(psum/p_last-1)
             if frac_diff < tol:
                 break
@@ -560,118 +560,6 @@ def em_run_ponly(conf, pixels, sums, gmix, gmix_psf, fill_zero_weight=False):
     gmix['norm_set'][:] = 0
 
     return numiter, frac_diff, sky
-
-
-@njit
-def em_run_ponly_old(conf, pixels, sums, gmix, gmix_psf,
-                     fill_zero_weight=False):
-    """
-    run the EM algorithm, allowing only fluxes to vary
-
-    Parameters
-    ----------
-    conf: array
-        Should have fields
-            tol: tolerance for stopping
-            sky: guess for the sky
-            counts: counts in the image
-            miniter: minimum number of iterations
-            maxiter: maximum number of iterations
-            pixel_scale: pixel scale
-
-    pixels: pixel array
-        for the image/jacobian
-    sums: array with fields
-        The sums array, a type _sums_dtype_ponly
-    gmix: gauss2d array
-        The initial mixture.  The final result is also stored in this array.
-    gmix_psf: gauss2d array
-        Single gaussian psf
-    """
-
-    em_convolve_1gauss(gmix, gmix_psf)
-    gmix_set_norms(gmix)
-
-    p_last = gmix['p'].sum()
-
-    gmix_set_norms(gmix)
-    tol = conf['tol']
-    counts = conf['counts']
-
-    pix_area = conf['pixel_scale']*conf['pixel_scale']
-    area = pixels.size*pix_area
-
-    frac_sky = conf['sky_guess']*pixels.size/counts
-    nsky = frac_sky * pix_area
-
-    counts_data = counts - conf['sky_guess']*pixels.size
-
-    for i in range(conf['maxiter']):
-        skysum = 0.0
-        clear_sums_ponly(sums)
-
-        if fill_zero_weight:
-            # skyval = nsky/pix_area/pixels.size*counts
-            # frac_sky = nsky/pix_area
-            # skyval = frac_sky/pixels.size*counts
-            # print('skyval_orig:', conf['sky_guess'], 'skyval:', skyval)
-
-            if i == 0:
-                skyval = conf['sky_guess']
-                flux = counts_data
-            else:
-                frac_sky = nsky/pix_area
-                skyval = frac_sky/pixels.size*counts
-                print('skyval_orig:', conf['sky_guess'], 'skyval:', skyval)
-
-            print('counts_data:', counts_data, 'flux:', flux)
-
-            # fill_zero_weight_pixels(gmix, pixels, skyval,
-            #                         counts_data*pix_area)
-            fill_zero_weight_pixels(gmix, pixels, skyval,
-                                    flux*pix_area)
-
-        gsum = g2sum = gIsum = 0.0
-        for pixel in pixels:
-
-            # this fills some fields of sums, as well as return
-            tgsum, tg2sum, tgIsum = do_scratch_sums_ponly(pixel, gmix, sums)
-
-            gsum += tgsum
-            g2sum += tg2sum
-            gIsum += tgIsum
-
-            gtot = tgsum + nsky
-            if gtot == 0.0:
-                raise GMixRangeError("gtot == 0")
-
-            imnorm = pixel['val']/counts
-            skysum += nsky*imnorm/gtot
-            igrat = imnorm/gtot
-
-            # multiply sums by igrat, among other things
-            do_sums_ponly(sums, igrat)
-
-        gmix_set_from_sums_ponly(gmix, sums)
-
-        nsky = skysum/area
-
-        flux = get_flux(gsum, g2sum, gIsum)
-
-        numiter = i+1
-        if numiter > conf['miniter']:
-            psum = gmix['p'].sum()
-            frac_diff = abs(psum/p_last-1)
-            if frac_diff < tol:
-                break
-
-            p_last = psum
-
-    em_deconvolve_1gauss(gmix, gmix_psf)
-    gmix['norm_set'][:] = 0
-
-    return numiter, frac_diff, nsky*counts
-    # return numiter, frac_diff, sky
 
 
 @njit
