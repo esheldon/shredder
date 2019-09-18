@@ -11,7 +11,6 @@ from ngmix.gmix_nb import (
     gmix_set_norms,
     gauss2d_set_norm,
     gmix_eval_pixel_fast,
-    # gmix_eval_pixel,
     GMIX_LOW_DETVAL,
 )
 from ngmix.fastexp import expd
@@ -550,12 +549,10 @@ def set_logtau_logdet(gmix, sums):
     set log(tau) and log(det) for every gaussian
     """
 
-    psum = gmix['p'].sum()
-
     for i in range(gmix.size):
         gauss = gmix[i]
         tsums = sums[i]
-        tsums['logtau'] = np.log(gauss['p']/psum)
+        tsums['logtau'] = np.log(gauss['p'])
         tsums['logdet'] = np.log(gauss['det'])
 
 
