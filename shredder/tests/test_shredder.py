@@ -143,7 +143,8 @@ def test_shredder_bad_columns(seed, show=False):
 
     for fill_zero_weight in [False, True]:
         s = shredder.Shredder(
-            mbobs, rng=rng, fill_zero_weight=fill_zero_weight,
+            mbobs, rng=rng,
+            fill_zero_weight=fill_zero_weight,
         )
         s.shred(gm_guess)
 
