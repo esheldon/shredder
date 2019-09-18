@@ -296,7 +296,6 @@ def em_run_fixcen(conf, pixels, sums, gmix, gmix_psf, fill_zero_weight=False):
 
             skysum += sky*pixel['val']/gtot
 
-            # multiply sums by igrat, among other things
             do_sums_fixcen(sums, pixel, gtot)
 
         gmix_set_from_sums_fixcen(gmix, gmix_psf, sums, pix_area)
@@ -613,23 +612,6 @@ def do_sums_ponly(sums, pixel, gtot):
 
         # gi*image_val/sum(gi)
         wtau = tsums['gi']*factor
-
-        tsums['pnew'] += wtau
-
-
-@njit
-def do_sums_ponly_old(sums, igrat):
-    """
-    do the sums based on the scratch values
-    """
-
-    n_gauss = sums.size
-    for i in range(n_gauss):
-        tsums = sums[i]
-
-        # wtau is gi[pix]/sum(g)*im[pix]/sum(im)
-        # which is Dave's tau*imnorm = wtau
-        wtau = tsums['gi']*igrat
 
         tsums['pnew'] += wtau
 
