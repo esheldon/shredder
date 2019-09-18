@@ -59,12 +59,21 @@ class GMixEMFixCen(object):
 
         self._set_runner()
 
+    def has_gmix(self):
+        """
+        returns True if a gmix is set
+        """
+        if hasattr(self, '_gm'):
+            return True
+        else:
+            return False
+
     def get_gmix(self):
         """
         Get the gaussian mixture from the final iteration
         """
-        if not hasattr(self, '_gm'):
-            raise RuntimeError('run go() first')
+        if not self.has_gmix():
+            raise RuntimeError('no gmix set')
 
         return self._gm.copy()
 
@@ -296,14 +305,13 @@ def em_run_fixcen(conf, pixels, sums, gmix, gmix_psf, fill_zero_weight=False):
             sky = skysum/npix
             # print('sky_orig:', conf['sky'], 'sky:', sky)
 
-        if i > conf['miniter']:
+        numiter = i+1
+        if numiter > conf['miniter']:
             frac_diff = abs((elogL - elogL_last)/elogL)
             if frac_diff < tol:
                 break
 
         elogL_last = elogL
-
-    numiter = i+1
 
     em_deconvolve_1gauss(gmix, gmix_psf)
     gmix['norm_set'][:] = 0
@@ -638,15 +646,15 @@ def em_run_ponly(conf, pixels, sums, gmix, gmix_psf, fill_zero_weight=False):
             sky = skysum/npix
             # print('sky_orig:', conf['sky'], 'sky:', sky)
 
-        if i > conf['miniter']:
-            psum = gmix['p'].sum()
+        psum = gmix['p'].sum()
+
+        numiter = i+1
+        if numiter > conf['miniter']:
             frac_diff = abs(psum/p_last-1)
             if frac_diff < tol:
                 break
 
-            p_last = psum
-
-    numiter = i+1
+        p_last = psum
 
     em_deconvolve_1gauss(gmix, gmix_psf)
     gmix['norm_set'][:] = 0
@@ -750,15 +758,14 @@ def em_run_ponly_old(conf, pixels, sums, gmix, gmix_psf,
 
         flux = get_flux(gsum, g2sum, gIsum)
 
-        if i > conf['miniter']:
+        numiter = i+1
+        if numiter > conf['miniter']:
             psum = gmix['p'].sum()
             frac_diff = abs(psum/p_last-1)
             if frac_diff < tol:
                 break
 
             p_last = psum
-
-    numiter = i+1
 
     em_deconvolve_1gauss(gmix, gmix_psf)
     gmix['norm_set'][:] = 0
