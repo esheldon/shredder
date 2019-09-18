@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 class Shredder(object):
     def __init__(self,
                  mbobs,
-                 miniter=10,
+                 miniter=40,
                  maxiter=1000,
                  vary_sky=False,
                  fill_zero_weight=False,
@@ -243,6 +243,7 @@ class Shredder(object):
 
         return em
 
+    '''
     def _set_band_flux_and_gmix(self, obs, em):
         """
         get the total flux and set it in the mixture
@@ -283,6 +284,7 @@ class Shredder(object):
         res['total_flux_err'] = flux
 
         return res
+    '''
 
     def _get_band_guess(self):
         """
@@ -299,6 +301,7 @@ class Shredder(object):
         return gmix_guess
 
 
+'''
 def get_flux_fill(im, wt, model_in):
     """
     use the input model as a template and infer the total
@@ -386,3 +389,4 @@ def get_flux(im, wt, model_in):
             logger.info('cannot calculate err')
 
     return flux, flux_err
+'''
