@@ -4,6 +4,34 @@ import esutil as eu
 import pytest
 
 
+def _add_T_and_scale(obj_data, scale):
+    """
+    for guesses we need T and scaled flux to surface brightness
+    """
+
+    add_dt = [('T', 'f4')]
+    objs = eu.numpy_util.add_fields(obj_data, add_dt)
+
+    # fluxes are in image units not surface brightness
+    objs['flux'] *= scale**2
+
+    # bad for non-gaussians, but what else do we have?
+    min_sigma = scale
+    min_T = 2*min_sigma**2
+    T = 2*objs['hlr']**2
+    T = T.clip(min=min_T)
+    objs['T'] = T
+    """
+    objs['T'] = rng.uniform(
+        low=2.0*scale**2,
+        high=4.0*scale**2,
+        size=objs.size,
+    )
+    """
+
+    return objs
+
+
 @pytest.mark.parametrize('seed', [55, 77])
 @pytest.mark.parametrize('vary_sky', [False, True])
 def test_shredder_smoke(seed, vary_sky, show=False):
@@ -16,16 +44,8 @@ def test_shredder_smoke(seed, vary_sky, show=False):
 
     scale = sim['image']['pixel_scale']
 
-    centers = mbobs.meta['centers']
-    add_dt = [('T', 'f8')]
-    objs = eu.numpy_util.add_fields(centers, add_dt)
-
-    # fake size guesses
-    objs['T'] = rng.uniform(
-        low=2.0*scale**2,
-        high=4.0*scale**2,
-        size=objs.size,
-    )
+    obj_data = mbobs.meta['obj_data']
+    objs = _add_T_and_scale(obj_data, scale)
 
     gm_guess = shredder.get_guess(
         objs,
@@ -61,16 +81,8 @@ def test_shredder(seed):
 
     scale = sim['image']['pixel_scale']
 
-    centers = mbobs.meta['centers']
-    add_dt = [('T', 'f8')]
-    objs = eu.numpy_util.add_fields(centers, add_dt)
-
-    # fake size guesses
-    objs['T'] = rng.uniform(
-        low=2.0*scale**2,
-        high=4.0*scale**2,
-        size=objs.size,
-    )
+    obj_data = mbobs.meta['obj_data']
+    objs = _add_T_and_scale(obj_data, scale)
 
     gm_guess = shredder.get_guess(
         objs,
@@ -79,7 +91,7 @@ def test_shredder(seed):
         rng=rng,
     )
 
-    s = shredder.Shredder(mbobs, rng=rng, miniter=50)  # tol=1.0e-5)
+    s = shredder.Shredder(mbobs, rng=rng)
     s.shred(gm_guess)
 
     res = s.get_result()
@@ -119,17 +131,8 @@ def test_shredder_bad_columns(seed, show=False):
     mbobs = sim()
 
     scale = sim['image']['pixel_scale']
-
-    centers = mbobs.meta['centers']
-    add_dt = [('T', 'f8')]
-    objs = eu.numpy_util.add_fields(centers, add_dt)
-
-    # fake size guesses
-    objs['T'] = rng.uniform(
-        low=2.0*scale**2,
-        high=4.0*scale**2,
-        size=objs.size,
-    )
+    obj_data = mbobs.meta['obj_data']
+    objs = _add_T_and_scale(obj_data, scale)
 
     gm_guess = shredder.get_guess(
         objs,
@@ -157,9 +160,7 @@ def test_shredder_bad_columns(seed, show=False):
 
 
 if __name__ == '__main__':
-    # seed = 15575
-    # seed = 278
+    seed = 278
     # seed = np.random.randint(0, 2**10)
-    # test_shredder_bad_columns(seed, show=True)
-    seed = 125
     test_shredder_smoke(seed, False, show=True)
+    test_shredder_bad_columns(seed, show=True)
