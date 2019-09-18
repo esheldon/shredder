@@ -133,6 +133,7 @@ class Shredder(object):
         res = self._result
 
         cres = em_coadd.get_result()
+        logger.debug('coadd: %s' % repr(cres))
 
         res['coadd_result'] = cres
         res['coadd_fitter'] = em_coadd
