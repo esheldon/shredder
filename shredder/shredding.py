@@ -20,6 +20,7 @@ class Shredder(object):
                  mbobs,
                  miniter=10,
                  maxiter=1000,
+                 vary_sky=False,
                  fill_zero_weight=False,
                  tol=0.001,
                  rng=None):
@@ -38,6 +39,8 @@ class Shredder(object):
             Maximum number of iterations, default 1000
         tol: number, optional
             The tolerance in the weighted logL, default 1.e-3
+        vary_sky: bool
+            If True, vary the sky
         rng: random number generator
             E.g. np.random.RandomState.
         """
@@ -62,6 +65,7 @@ class Shredder(object):
         self.miniter = miniter
         self.maxiter = maxiter
         self.tol = tol
+        self.vary_sky = vary_sky
 
         if rng is None:
             rng = np.random.RandomState()
@@ -93,7 +97,7 @@ class Shredder(object):
         """
 
         res = self.get_result()
-        gm = res['band_results'][band]['gmix_convolved']
+        gm = res['band_gmix_convolved'][band]
 
         dims = self.mbobs[band][0].image.shape
         jacob = self.mbobs[band][0].jacobian
@@ -132,6 +136,8 @@ class Shredder(object):
         cres = em_coadd.get_result()
         res['coadd_result'] = cres
         res['coadd_fitter'] = em_coadd
+        res['coadd_gmix'] = em_coadd.get_gmix()
+        res['coadd_gmix_convolved'] = em_coadd.get_convolved_gmix()
 
         res['flags'] != cres['flags']
 
@@ -139,8 +145,6 @@ class Shredder(object):
             # we failed in such a way that we cannot proceed
             res['flags'] |= procflags.COADD_FAILURE
         else:
-            cres['gmix'] = em_coadd.get_gmix()
-
             self._do_multiband_fit()
 
     def _do_coadd_fit(self, gmix_guess):
@@ -165,6 +169,7 @@ class Shredder(object):
             miniter=self.miniter,
             maxiter=self.maxiter,
             tol=self.tol,
+            vary_sky=self.vary_sky,
         )
 
         em.go(gmix_guess, sky)
@@ -179,6 +184,8 @@ class Shredder(object):
 
         reslist = []
         fitters = []
+        gmlist = []
+        gmclist = []
 
         for band, obslist in enumerate(self.mbobs):
             obs = obslist[0]
@@ -193,13 +200,20 @@ class Shredder(object):
             if bres['flags'] != 0 and bres['flags'] & EM_MAXITER == 0:
                 logger.info('could not get flux fit for band %d' % band)
                 res['flags'] |= procflags.BAND_FAILURE
-            else:
-                bres = self._set_band_flux_and_gmix(obs, em)
+            # else:
+            #    bres = self._set_band_flux_and_gmix(obs, em)
 
             reslist.append(bres)
 
+            gm = em.get_gmix()
+            gm_convolved = em.get_convolved_gmix()
+            gmlist.append(gm)
+            gmclist.append(gm_convolved)
+
         res['band_results'] = reslist
         res['band_fitters'] = fitters
+        res['band_gmix'] = gmlist
+        res['band_gmix_convolved'] = gmclist
 
     def _get_band_fit(self, obs):
         """
@@ -220,6 +234,7 @@ class Shredder(object):
             miniter=self.miniter,
             maxiter=self.maxiter,
             tol=self.tol,
+            vary_sky=self.vary_sky,
         )
 
         gm_guess = self._get_band_guess()
@@ -274,7 +289,7 @@ class Shredder(object):
         get a guess for the band based on the coadd mixture
         """
         rng = self._rng
-        gmix_guess = self._result['coadd_result']['gmix'].copy()
+        gmix_guess = self._result['coadd_gmix'].copy()
 
         gdata = gmix_guess.get_data()
         for idata in range(gdata.size):

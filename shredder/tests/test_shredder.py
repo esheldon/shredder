@@ -5,7 +5,8 @@ import pytest
 
 
 @pytest.mark.parametrize('seed', [55, 77])
-def test_shredder_smoke(seed, show=False):
+@pytest.mark.parametrize('vary_sky', [False, True])
+def test_shredder_smoke(seed, vary_sky, show=False):
     """
     test we can run end to end
     """
@@ -33,14 +34,20 @@ def test_shredder_smoke(seed, show=False):
         rng=rng,
     )
 
-    s = shredder.Shredder(mbobs, rng=rng)
+    s = shredder.Shredder(
+        mbobs,
+        vary_sky=vary_sky,
+        rng=rng,
+    )
     s.shred(gm_guess)
 
     res = s.get_result()
+    print(res['coadd_result'])
     assert res['flags'] == 0
 
     if show:
-        s.plot_comparison(show=True)
+        title = 'vary sky: %s' % vary_sky
+        s.plot_comparison(show=True, title=title)
 
 
 @pytest.mark.parametrize('seed', [125, 871])
@@ -72,10 +79,11 @@ def test_shredder(seed):
         rng=rng,
     )
 
-    s = shredder.Shredder(mbobs, rng=rng)
+    s = shredder.Shredder(mbobs, rng=rng, miniter=50)  # tol=1.0e-5)
     s.shred(gm_guess)
 
     res = s.get_result()
+    print(res['coadd_result'])
     assert res['flags'] == 0
 
     models = s.get_model_images()
@@ -149,8 +157,9 @@ def test_shredder_bad_columns(seed, show=False):
 
 
 if __name__ == '__main__':
-    seed = 15575
+    # seed = 15575
     # seed = 278
     # seed = np.random.randint(0, 2**10)
     # test_shredder_bad_columns(seed, show=True)
-    test_shredder_smoke(seed, show=True)
+    seed = 125
+    test_shredder_smoke(seed, False, show=True)
