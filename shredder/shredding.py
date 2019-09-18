@@ -21,8 +21,8 @@ class Shredder(object):
                  miniter=40,
                  maxiter=1000,
                  vary_sky=False,
-                 fill_zero_weight=False,
                  tol=0.001,
+                 fill_zero_weight=True,
                  rng=None):
         """
         Parameters
@@ -41,6 +41,9 @@ class Shredder(object):
             The tolerance in the weighted logL, default 1.e-3
         vary_sky: bool
             If True, vary the sky
+        fill_zero_weight: bool, optional
+            If True, fill in zero weight pixels with the model on each
+            iteration. Default True
         rng: random number generator
             E.g. np.random.RandomState.
         """
@@ -124,25 +127,27 @@ class Shredder(object):
             A guess for the deblending
         """
 
-        em_coadd = self._do_coadd_fit(
-            gmix_guess,
-        )
+        em_coadd = self._do_coadd_fit(gmix_guess)
 
-        self._result = {
-            'flags': 0,
-        }
+        self._result = {'flags': 0}
         res = self._result
 
         cres = em_coadd.get_result()
+
         res['coadd_result'] = cres
         res['coadd_fitter'] = em_coadd
-        res['coadd_gmix'] = em_coadd.get_gmix()
-        res['coadd_gmix_convolved'] = em_coadd.get_convolved_gmix()
 
-        res['flags'] != cres['flags']
+        res['coadd_psf_gmix'] = self.coadd_obs.psf.gmix.copy()
+
+        if em_coadd.has_gmix():
+            res['coadd_gmix'] = em_coadd.get_gmix()
+            res['coadd_gmix_convolved'] = em_coadd.get_convolved_gmix()
+        else:
+            res['coadd_gmix'] = None
+            res['coadd_gmix_convolved'] = None
 
         if cres['flags'] != 0 and cres['flags'] & EM_MAXITER == 0:
-            # we failed in such a way that we cannot proceed
+            # we cannot proceed without the coadd fit
             res['flags'] |= procflags.COADD_FAILURE
         else:
             self._do_multiband_fit()
@@ -184,11 +189,14 @@ class Shredder(object):
 
         reslist = []
         fitters = []
+        pgmlist = []
         gmlist = []
         gmclist = []
 
         for band, obslist in enumerate(self.mbobs):
             obs = obslist[0]
+
+            pgmlist.append(obs.psf.gmix.copy())
 
             em = self._get_band_fit(obs)
             fitters.append(em)
@@ -200,18 +208,22 @@ class Shredder(object):
             if bres['flags'] != 0 and bres['flags'] & EM_MAXITER == 0:
                 logger.info('could not get flux fit for band %d' % band)
                 res['flags'] |= procflags.BAND_FAILURE
-            # else:
-            #    bres = self._set_band_flux_and_gmix(obs, em)
 
             reslist.append(bres)
 
-            gm = em.get_gmix()
-            gm_convolved = em.get_convolved_gmix()
+            if em.has_gmix():
+                gm = em.get_gmix()
+                gm_convolved = em.get_convolved_gmix()
+            else:
+                gm = None
+                gm_convolved = None
+
             gmlist.append(gm)
             gmclist.append(gm_convolved)
 
         res['band_results'] = reslist
         res['band_fitters'] = fitters
+        res['band_psf_gmix'] = pgmlist
         res['band_gmix'] = gmlist
         res['band_gmix_convolved'] = gmclist
 
