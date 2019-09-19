@@ -70,7 +70,7 @@ class GMixEMFixCen(object):
 
     def get_gmix(self):
         """
-        Get the gaussian mixture from the final iteration
+        Get a copy of the gaussian mixture from the final iteration
         """
         if not self.has_gmix():
             raise RuntimeError('no gmix set')
@@ -81,7 +81,7 @@ class GMixEMFixCen(object):
         """
         Get the gaussian mixture from the final iteration
         """
-        gm = self.get_gmix().copy()
+        gm = self.get_gmix()
         em_convolve_1gauss(
             gm.get_data(),
             self._obs.psf.gmix.get_data(),
@@ -149,6 +149,7 @@ class GMixEMFixCen(object):
 
             pars = gm.get_full_pars()
             self._gm = GMix(pars=pars)
+            # print('Tmade:', self._gm.get_T())
 
             if numiter >= self.maxiter:
                 flags = EM_MAXITER
@@ -698,6 +699,8 @@ def em_deconvolve_1gauss(gmix, gmix_psf):
     for i in range(gmix.size):
         gauss = gmix[i]
 
+        # print('p:', gauss['p'])
+        # print('T before:', gauss['irr'] + gauss['icc'])
         gauss2d_set(
             gauss,
             gauss['p'],
@@ -707,6 +710,7 @@ def em_deconvolve_1gauss(gmix, gmix_psf):
             gauss['irc'] - psf_irc,
             gauss['icc'] - psf_icc,
         )
+        # print('T after:', gauss['irr'] + gauss['icc'])
 
 
 @njit
