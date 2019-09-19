@@ -133,7 +133,7 @@ class Shredder(object):
         res = self._result
 
         cres = em_coadd.get_result()
-        logger.debug('coadd: %s' % repr(cres))
+        logger.info('coadd: %s' % repr(cres))
 
         res['coadd_result'] = cres
         res['coadd_fitter'] = em_coadd
@@ -204,7 +204,7 @@ class Shredder(object):
 
             bres = em.get_result()
 
-            logger.debug('band %d: %s' % (band, repr(bres)))
+            logger.info('band %d: %s' % (band, repr(bres)))
 
             if bres['flags'] != 0 and bres['flags'] & EM_MAXITER == 0:
                 logger.info('could not get flux fit for band %d' % band)
