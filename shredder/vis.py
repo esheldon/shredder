@@ -114,30 +114,53 @@ def compare_rgb_images(image,
     else:
         diff_title = None
 
-    arat = image.shape[1]/image.shape[0]
-    tab = biggles.Table(2, 2, aspect_ratio=arat)
+    imrow, imcol = 0, 0
+    modrow, modcol = 0, 1
 
-    tab[0, 0] = images.view(
+    nrows = 2
+    if seg is not None and weight is not None:
+        ncols = 3
+        arat = image.shape[1]/image.shape[0] * 2/3
+
+        diffrow, diffcol = 0, 2
+        segrow, segcol = 1, 0
+        wtrow, wtcol = 1, 1
+    else:
+        ncols = 2
+        arat = image.shape[1]/image.shape[0]
+
+        diffrow, diffcol = 1, 0
+
+        if seg is not None:
+            segrow, segcol = 1, 1
+        elif weight is not None:
+            wtrow, wtcol = 1, 1
+
+    tab = biggles.Table(nrows, ncols, aspect_ratio=arat)
+
+
+    tab[imrow, imcol] = images.view(
         image,  # /maxval,
         show=False,
         title='image',
     )
-    tab[0, 1] = images.view(
+    tab[modrow, modcol] = images.view(
         model,  # /maxval,
         show=False,
         title='model',
     )
 
-    tab[1, 0] = images.view(
+    tab[diffrow, diffcol] = images.view(
         diffim,
         show=False,
         title=diff_title,
     )
 
     if seg is not None:
-        tab[1, 1] = plot_seg(seg, rng=rng, width=width, title='seg')
-    elif weight is not None:
-        tab[1, 1] = images.view(weight, show=False, tilte='weight')
+        tab[segrow, segcol] = plot_seg(seg, rng=rng, width=width, title='seg')
+
+    if weight is not None:
+        tab[wtrow, wtcol] = images.view(weight, show=False, title='weight')
 
     if title is not None:
         tab.title = title
