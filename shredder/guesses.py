@@ -6,6 +6,7 @@ logger = logging.getLogger(__name__)
 
 
 def get_guess(objs,
+              minflux=1.0,
               jacobian=None,
               pixel_scale=1.0,
               model='dev',
@@ -21,6 +22,8 @@ def get_guess(objs,
               TODO may want to make row, col in arcsec
             - x, y, x2, y2 all in pixel units and flux in flux units
             - these should be in zero-offset coordinates
+    minflux: float, optional
+        Minimum flux allowed. Default 1.0
     pixel_scale: float
         The pixel scale, default 1
     model: string, optional
@@ -36,7 +39,9 @@ def get_guess(objs,
         ur = rng.uniform
 
     if jacobian is not None:
-        scale = jacobian.scale
+        pixel_scale = jacobian.scale
+
+    assert minflux > 0.0
 
     guess_pars = []
     for i in range(objs.size):
@@ -44,7 +49,7 @@ def get_guess(objs,
             Tguess = objs['T'][i]  # *pixel_scale**2
             row = objs['row'][i]
             col = objs['col'][i]
-            flux = objs['flux'][i] # *pixel_scale**2
+            flux = objs['flux'][i]  # *pixel_scale**2
         else:
             x2 = objs['x2'][i]
             y2 = objs['y2'][i]
@@ -54,6 +59,10 @@ def get_guess(objs,
             col = objs['x'][i]
 
             flux = objs['flux'][i]*pixel_scale**2
+
+        if flux < minflux:
+            print('flux %g less than minflux %g' % (flux, minflux))
+            flux = minflux
 
         if jacobian is not None:
             row, col = jacobian.get_vu(row, col)
