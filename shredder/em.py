@@ -149,7 +149,7 @@ class GMixEMFixCen(object):
 
             pars = gm.get_full_pars()
             self._gm = GMix(pars=pars)
-            # print('Tmade:', self._gm.get_T())
+            print('Tmade:', self._gm.get_T())
 
             if numiter >= self.maxiter:
                 flags = EM_MAXITER
@@ -699,8 +699,8 @@ def em_deconvolve_1gauss(gmix, gmix_psf):
     for i in range(gmix.size):
         gauss = gmix[i]
 
-        # print('p:', gauss['p'])
-        # print('T before:', gauss['irr'] + gauss['icc'])
+        print('p:', gauss['p'])
+        print('T before:', gauss['irr'] + gauss['icc'])
         gauss2d_set(
             gauss,
             gauss['p'],
@@ -710,7 +710,7 @@ def em_deconvolve_1gauss(gmix, gmix_psf):
             gauss['irc'] - psf_irc,
             gauss['icc'] - psf_icc,
         )
-        # print('T after:', gauss['irr'] + gauss['icc'])
+        print('T after:', gauss['irr'] + gauss['icc'])
 
 
 @njit

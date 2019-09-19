@@ -40,7 +40,12 @@ def test_shredder_smoke(seed, vary_sky, show=False):
     """
     rng = np.random.RandomState(seed)
     sim = shredder.sim.Sim(rng=rng)
+    sim['psf']['model'] = 'gauss'
+    sim['psf']['fwhm'] = 0.9
+    sim['objects']['flux_range'] = [100, 200]
+    sim['objects']['hlr_range'] = (0.0001, 0.0001)
     mbobs = sim()
+    model = 'gauss'
 
     scale = sim['image']['pixel_scale']
 
@@ -50,7 +55,7 @@ def test_shredder_smoke(seed, vary_sky, show=False):
     gm_guess = shredder.get_guess(
         objs,
         jacobian=mbobs[0][0].jacobian,
-        model='dev',
+        model=model,
         rng=rng,
     )
 
