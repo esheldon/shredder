@@ -20,6 +20,7 @@ def get_guess(objs,
             - row, col in pixels, T in arcsec^2 and flux in surface brightness
               TODO may want to make row, col in arcsec
             - x, y, x2, y2 all in pixel units and flux in flux units
+            - these should be in zero-offset coordinates
     pixel_scale: float
         The pixel scale, default 1
     model: string, optional
