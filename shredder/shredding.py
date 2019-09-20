@@ -16,8 +16,9 @@ logger = logging.getLogger(__name__)
 
 
 class Shredder(object):
-    def __init__(self,
-                 mbobs,
+    def __init__(self, *,
+                 obs,
+                 psf_ngauss,
                  miniter=40,
                  maxiter=1000,
                  vary_sky=False,
@@ -51,29 +52,30 @@ class Shredder(object):
         # TODO deal with Observation input, which would only use
         # the "coadd" result and would not actually coadd
 
-        if fill_zero_weight:
-            self._ignore_zero_weight = False
-        else:
-            self._ignore_zero_weight = True
-
-        self.mbobs = mbobs
-        do_psf_fit(self.mbobs)
-
-        self.coadd_obs = coadding.make_coadd_obs(
-            mbobs,
-            ignore_zero_weight=self._ignore_zero_weight,
-        )
-        do_psf_fit(self.coadd_obs)
-
-        self.miniter = miniter
-        self.maxiter = maxiter
-        self.tol = tol
-        self.vary_sky = vary_sky
+        self.mbobs = obs
 
         if rng is None:
             rng = np.random.RandomState()
 
         self._rng = rng
+
+        if fill_zero_weight:
+            self._ignore_zero_weight = False
+        else:
+            self._ignore_zero_weight = True
+
+        do_psf_fit(self.mbobs, psf_ngauss, rng=self._rng)
+
+        self.coadd_obs = coadding.make_coadd_obs(
+            self.mbobs,
+            ignore_zero_weight=self._ignore_zero_weight,
+        )
+        do_psf_fit(self.coadd_obs, psf_ngauss, rng=self._rng)
+
+        self.miniter = miniter
+        self.maxiter = maxiter
+        self.tol = tol
+        self.vary_sky = vary_sky
 
     def get_result(self):
         """
