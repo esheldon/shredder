@@ -41,7 +41,7 @@ def test_shredder_smoke(seed, vary_sky, show=False):
     rng = np.random.RandomState(seed)
     conf={'psf': {'model':'gauss', 'fwhm':0.9}}
     sim = shredder.sim.Sim(rng=rng, config=conf)
-    sim['objects']['flux_range'] = [100, 200]
+    sim['objects']['flux_range'] = [10, 20]
     sim['objects']['hlr_range'] = (0.0001, 0.0001)
     mbobs = sim()
     model = 'gauss'
