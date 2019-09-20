@@ -57,7 +57,7 @@ def do_psf_fit(obs, ngauss, rng=None):
             fitter = runner.fitter
         else:
             do_cen = False
-            do_offset = False
+            do_offset = True
 
             if do_cen:
                 runner1 = ngmix.bootstrap.PSFRunner(
@@ -104,13 +104,15 @@ def do_psf_fit(obs, ngauss, rng=None):
             )
             fitter = GMixEMFixCen(
                 emobs,
-                miniter=40,
+                miniter=20,
                 tol=1.0e-4,
             )
 
             fitter.go(guess, sky)
 
         res = fitter.get_result()
+        logger.debug(res)
+
         if res['flags'] != 0:
             raise RuntimeError('psf fitting failed')
 
