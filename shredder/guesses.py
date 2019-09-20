@@ -6,7 +6,7 @@ logger = logging.getLogger(__name__)
 
 
 def get_guess(objs,
-              minflux=1.0,
+              minflux=0.01,
               jacobian=None,
               pixel_scale=1.0,
               model='dev',
