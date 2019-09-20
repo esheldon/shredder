@@ -310,8 +310,9 @@ def em_run_fixcen(conf, pixels, sums, gmix, gmix_psf, fill_zero_weight=False):
             if elogL == 0.0:
                 raise GMixRangeError('elogL == 0')
 
-            frac_diff = (elogL - elogL_last)/elogL
-            if frac_diff > 0 and frac_diff < tol:
+            frac_diff = abs((elogL - elogL_last)/elogL)
+            #if frac_diff > 0 and frac_diff < tol:
+            if frac_diff < tol:
                 break
 
         elogL_last = elogL
