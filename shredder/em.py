@@ -8,8 +8,10 @@ from ngmix.gmix import GMix
 from ngmix.gexceptions import GMixRangeError
 from ngmix.gmix_nb import (
     gauss2d_set,
+    # gauss2d_set_norm,
     gmix_set_norms,
-    gauss2d_set_norm,
+    gmix_get_cen,
+    gmix_convolve_fill,
     gmix_eval_pixel_fast,
     GMIX_LOW_DETVAL,
 )
@@ -53,7 +55,6 @@ class GMixEMFixCen(object):
         self.tol = tol
         self.vary_sky = vary_sky
 
-        self._gm = None
         self._sums = None
         self._result = None
 
@@ -81,12 +82,10 @@ class GMixEMFixCen(object):
         """
         Get the gaussian mixture from the final iteration
         """
-        gm = self.get_gmix()
-        em_convolve_1gauss(
-            gm.get_data(),
-            self._obs.psf.gmix.get_data(),
-        )
-        return gm
+        if not self.has_gmix():
+            raise RuntimeError('no gmix set')
+
+        return self._gm_conv.copy()
 
     def get_result(self):
         """
@@ -118,14 +117,19 @@ class GMixEMFixCen(object):
 
         if hasattr(self, '_gm'):
             del self._gm
+            del self._gm_conv
 
         obs = self._obs
+
+        # makes a copy
         gmix_psf = obs.psf.gmix
+        gmix_psf.set_flux(1.0)
 
         conf = self._make_conf()
         conf['sky'] = sky
 
         gm = gmix_guess.copy()
+        gm_conv = gm.convolve(gmix_psf)
 
         sums = self._make_sums(len(gm))
 
@@ -144,11 +148,15 @@ class GMixEMFixCen(object):
                 sums,
                 gm.get_data(),
                 gmix_psf.get_data(),
+                gm_conv.get_data(),
                 fill_zero_weight=fill_zero_weight,
             )
 
             pars = gm.get_full_pars()
+            pars_conv = gm_conv.get_full_pars()
             self._gm = GMix(pars=pars)
+            self._gm_conv = GMix(pars=pars_conv)
+
             print('Tmade:', self._gm.get_T())
 
             if numiter >= self.maxiter:
@@ -233,7 +241,13 @@ class GMixEMPOnly(GMixEMFixCen):
 
 
 @njit
-def em_run_fixcen(conf, pixels, sums, gmix, gmix_psf, fill_zero_weight=False):
+def em_run_fixcen(conf,
+                  pixels,
+                  sums,
+                  gmix,
+                  gmix_psf,
+                  gmix_conv,
+                  fill_zero_weight=False):
     """
     run the EM algorithm, with fixed positions and a psf mixture to provide a
     shapred minimim resolution
@@ -252,18 +266,22 @@ def em_run_fixcen(conf, pixels, sums, gmix, gmix_psf, fill_zero_weight=False):
 
     pixels: pixel array
         for the image/jacobian
-    gmix: gaussian mixture
-        Initialized to the starting guess
     sums: array with fields
         The sums array, a type _sums_dtype_fixcen
     gmix: gauss2d array
         The initial mixture.  The final result is also stored in this array.
     gmix_psf: gauss2d array
         Single gaussian psf
+    gmix_conv: gauss2d array
+        Convolved gmix
+    fill_zero_weight: bool
+        If True, fill the zero weight pixels with the model on
+        each iteration
     """
 
-    em_convolve_1gauss(gmix, gmix_psf)
-    gmix_set_norms(gmix)
+    # em_convolve_1gauss(gmix, gmix_psf)
+    # gmix_set_norms(gmix)
+    gmix_set_norms(gmix_conv)
 
     tol = conf['tol']
 
@@ -280,14 +298,14 @@ def em_run_fixcen(conf, pixels, sums, gmix, gmix_psf, fill_zero_weight=False):
         skysum = 0.0
 
         clear_sums_fixcen(sums)
-        set_logtau_logdet(gmix, sums)
+        set_logtau_logdet(gmix_conv, sums)
 
         if fill_zero_weight:
-            fill_zero_weight_pixels(gmix, pixels, sky)
+            fill_zero_weight_pixels(gmix_conv, pixels, sky)
 
         for pixel in pixels:
 
-            gsum, tlogL = do_scratch_sums_fixcen(pixel, gmix, sums)
+            gsum, tlogL = do_scratch_sums_fixcen(pixel, gmix_conv, sums)
 
             gtot = gsum + sky
             if gtot == 0.0:
@@ -299,7 +317,13 @@ def em_run_fixcen(conf, pixels, sums, gmix, gmix_psf, fill_zero_weight=False):
 
             do_sums_fixcen(sums, pixel, gtot)
 
-        gmix_set_from_sums_fixcen(gmix, gmix_psf, sums, pix_area)
+        gmix_set_from_sums_fixcen(
+            gmix,
+            gmix_psf,
+            gmix_conv,
+            sums,
+            pix_area,
+        )
 
         if conf['vary_sky']:
             sky = skysum/npix
@@ -311,13 +335,15 @@ def em_run_fixcen(conf, pixels, sums, gmix, gmix_psf, fill_zero_weight=False):
                 raise GMixRangeError('elogL == 0')
 
             frac_diff = abs((elogL - elogL_last)/elogL)
-            #if frac_diff > 0 and frac_diff < tol:
+            # if frac_diff > 0 and frac_diff < tol:
             if frac_diff < tol:
                 break
 
         elogL_last = elogL
 
-    em_deconvolve_1gauss(gmix, gmix_psf)
+    # em_deconvolve_1gauss(gmix, gmix_psf)
+    # we have modified the mixture and not set the norms,
+    # and we don't want to set them for the pre-psf mixture
     gmix['norm_set'][:] = 0
 
     return numiter, frac_diff, sky
@@ -406,17 +432,19 @@ def do_sums_fixcen(sums, pixel, gtot):
 
 
 @njit
-def gmix_set_from_sums_fixcen(gmix, gmix_psf, sums, pix_area):
+def gmix_set_from_sums_fixcen(gmix,
+                              gmix_psf,
+                              gmix_conv,
+                              sums,
+                              pix_area):
     """
-    fill the gaussian mixture from the em sums, requiring
-    that the covariance matrix after psf deconvolution
-    is not singular
+    fill the gaussian mixture from the em sums, requiring that the covariance
+    matrix before psf deconvolution is not singular
+
+    We may want to relax that
     """
 
-    # assuming single gaussian for psf
-    psf_irr = gmix_psf['irr'][0]
-    psf_irc = gmix_psf['irc'][0]
-    psf_icc = gmix_psf['icc'][0]
+    _, _, psf_irr, psf_irc, psf_icc, _ = gmix_get_moms(gmix_psf)
 
     n_gauss = gmix.size
     for i in range(n_gauss):
@@ -427,9 +455,19 @@ def gmix_set_from_sums_fixcen(gmix, gmix_psf, sums, pix_area):
         p = tsums['pnew']
         pinv = 1.0/p
 
-        irr = tsums['v2sum']*pinv - psf_irr
-        irc = tsums['uvsum']*pinv - psf_irc
-        icc = tsums['u2sum']*pinv - psf_icc
+        # update for convolved gaussian
+        irr = tsums['v2sum']*pinv
+        irc = tsums['uvsum']*pinv
+        icc = tsums['u2sum']*pinv
+
+        # get pre-psf moments, only works if the psf gaussians
+        # are all centered
+        irr = irr - psf_irr
+        irc = irc - psf_irc
+        icc = icc - psf_icc
+
+        # currently are forcing the sizes of pre-psf gaussians to
+        # be positive.  We may be able to relax this
 
         if irr < 0.0 or icc < 0.0:
             irr, irc, icc = 0.0001, 0.0, 0.0001
@@ -447,12 +485,15 @@ def gmix_set_from_sums_fixcen(gmix, gmix_psf, sums, pix_area):
             p*pix_area,
             gauss['row'],
             gauss['col'],
-            irr + psf_irr,
-            irc + psf_irc,
-            icc + psf_icc,
+            irr,
+            irc,
+            icc,
         )
 
-        gauss2d_set_norm(gauss)
+        # gauss2d_set_norm(gauss)
+
+    gmix_convolve_fill(gmix_conv, gmix, gmix_psf)
+    gmix_set_norms(gmix_conv)
 
 
 @njit
@@ -487,7 +528,13 @@ def clear_sums_fixcen(sums):
 
 
 @njit
-def em_run_ponly(conf, pixels, sums, gmix, gmix_psf, fill_zero_weight=False):
+def em_run_ponly(conf,
+                 pixels,
+                 sums,
+                 gmix,
+                 gmix_psf,
+                 gmix_conv,
+                 fill_zero_weight=False):
     """
     run the EM algorithm, allowing only fluxes to vary
 
@@ -510,10 +557,16 @@ def em_run_ponly(conf, pixels, sums, gmix, gmix_psf, fill_zero_weight=False):
         The initial mixture.  The final result is also stored in this array.
     gmix_psf: gauss2d array
         Single gaussian psf
+    gmix_conv: gauss2d array
+        Convolved gmix
+    fill_zero_weight: bool
+        If True, fill the zero weight pixels with the model on
+        each iteration
     """
 
-    em_convolve_1gauss(gmix, gmix_psf)
-    gmix_set_norms(gmix)
+    # em_convolve_1gauss(gmix, gmix_psf)
+    # gmix_set_norms(gmix)
+    gmix_set_norms(gmix_conv)
 
     tol = conf['tol']
 
@@ -529,12 +582,12 @@ def em_run_ponly(conf, pixels, sums, gmix, gmix_psf, fill_zero_weight=False):
         clear_sums_ponly(sums)
 
         if fill_zero_weight:
-            fill_zero_weight_pixels(gmix, pixels, sky)
+            fill_zero_weight_pixels(gmix_conv, pixels, sky)
 
         for pixel in pixels:
 
             # this fills some fields of sums, as well as return
-            gsum = do_scratch_sums_ponly(pixel, gmix, sums)
+            gsum = do_scratch_sums_ponly(pixel, gmix_conv, sums)
 
             gtot = gsum + sky
             if gtot == 0.0:
@@ -544,7 +597,13 @@ def em_run_ponly(conf, pixels, sums, gmix, gmix_psf, fill_zero_weight=False):
 
             do_sums_ponly(sums, pixel, gtot)
 
-        gmix_set_from_sums_ponly(gmix, sums, pix_area)
+        gmix_set_from_sums_ponly(
+            gmix,
+            gmix_psf,
+            gmix_conv,
+            sums,
+            pix_area,
+        )
 
         if conf['vary_sky']:
             sky = skysum/npix
@@ -560,7 +619,9 @@ def em_run_ponly(conf, pixels, sums, gmix, gmix_psf, fill_zero_weight=False):
 
         p_last = psum
 
-    em_deconvolve_1gauss(gmix, gmix_psf)
+    # em_deconvolve_1gauss(gmix, gmix_psf)
+    # we have modified the mixture and not set the norms,
+    # and we don't want to set them for the pre-psf mixture
     gmix['norm_set'][:] = 0
 
     return numiter, frac_diff, sky
@@ -622,7 +683,11 @@ def do_sums_ponly(sums, pixel, gtot):
 
 
 @njit
-def gmix_set_from_sums_ponly(gmix, sums, pix_area):
+def gmix_set_from_sums_ponly(gmix,
+                             gmix_psf,
+                             gmix_conv,
+                             sums,
+                             pix_area):
     """
     fill the gaussian mixture from the em sums
     """
@@ -646,7 +711,10 @@ def gmix_set_from_sums_ponly(gmix, sums, pix_area):
             gauss['icc'],
         )
 
-        gauss2d_set_norm(gauss)
+        # gauss2d_set_norm(gauss)
+
+    gmix_convolve_fill(gmix_conv, gmix, gmix_psf)
+    gmix_set_norms(gmix_conv)
 
 
 @njit
@@ -720,6 +788,34 @@ def get_flux(gsum, g2sum, gIsum):
     calculate the flux from the cross-correlation sums
     """
     return gsum*gIsum/g2sum
+
+
+@njit
+def gmix_get_moms(gmix):
+    """
+    get row, col, irr, irc, icc, psum
+    """
+
+    row, col, psum = gmix_get_cen(gmix)
+
+    irr = irc = icc = 0.0
+
+    for i in range(gmix.size):
+        gauss = gmix[i]
+
+        rowdiff = gauss['row'] - row
+        coldiff = gauss['col'] - col
+
+        p = gauss['p']
+        irr += p*(gauss['irr'] + rowdiff**2)
+        irc += p*(gauss['irc'] + rowdiff*coldiff)
+        icc += p*(gauss['icc'] + coldiff**2)
+
+    irr /= psum
+    irc /= psum
+    icc /= psum
+
+    return row, col, irr, irc, icc, psum
 
 
 _em_conf_dtype = [
