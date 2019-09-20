@@ -495,7 +495,6 @@ def gmix_set_from_sums_fixcen(gmix,
         # currently are forcing the sizes of pre-psf gaussians to
         # be positive.  We may be able to relax this
 
-        """
         if irr < 0.0 or icc < 0.0:
             irr, irc, icc = 0.0001, 0.0, 0.0001
 
@@ -506,7 +505,6 @@ def gmix_set_from_sums_fixcen(gmix,
             T = irr + icc
             irr = icc = T/2
             irc = 0.0
-        """
 
         # ngmix works in surface brightness, so multiply p by area since it
         # has the actual image value in there
