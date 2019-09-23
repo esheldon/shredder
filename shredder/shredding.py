@@ -19,7 +19,7 @@ class Shredder(object):
     def __init__(self, *,
                  obs,
                  psf_ngauss,
-                 miniter=40,
+                 miniter=20,
                  maxiter=1000,
                  vary_sky=False,
                  tol=0.001,
