@@ -19,8 +19,10 @@ class Shredder(object):
     def __init__(self, *,
                  obs,
                  psf_ngauss,
-                 miniter=20,
+                 miniter=40,
                  maxiter=1000,
+                 flux_miniter=20,
+                 flux_maxiter=1000,
                  vary_sky=False,
                  tol=0.001,
                  fill_zero_weight=True,
@@ -74,6 +76,10 @@ class Shredder(object):
 
         self.miniter = miniter
         self.maxiter = maxiter
+
+        self.flux_miniter = flux_miniter
+        self.flux_maxiter = flux_maxiter
+
         self.tol = tol
         self.vary_sky = vary_sky
 
@@ -246,8 +252,8 @@ class Shredder(object):
         )
         em = GMixEMPOnly(
             emobs,
-            miniter=self.miniter,
-            maxiter=self.maxiter,
+            miniter=self.flux_miniter,
+            maxiter=self.flux_maxiter,
             tol=self.tol,
             vary_sky=self.vary_sky,
         )
