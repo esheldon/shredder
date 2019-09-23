@@ -31,15 +31,15 @@ class Shredder(object):
         Parameters
         ----------
         obs: observations
-            Typcally an ngmix.MultiBandObsList, but can also
-            be a simple Observation
-
-            The image should not have zero or negative pixels. You can
-            use the ngmix.em.prep_image() function to ensure this.
+            Typcally an ngmix.MultiBandObsList
         miniter: int, optional
-            Mininum number of iterations, default 10
+            Mininum number of iterations, default 40
         maxiter: int, optional
             Maximum number of iterations, default 1000
+        flux_miniter: int, optional
+            Mininum number of iterations for flux fits, default 20
+        flux_maxiter: int, optional
+            Maximum number of iterations for flux fits, default 1000
         tol: number, optional
             The tolerance in the weighted logL, default 1.e-3
         vary_sky: bool
