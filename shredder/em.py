@@ -470,6 +470,8 @@ def gmix_set_from_sums_fixcen(gmix,
     We may want to relax that
     """
 
+    minval = 1.0e-4
+
     _, _, psf_irr, psf_irc, psf_icc, _ = gmix_get_moms(gmix_psf)
 
     n_gauss = gmix.size
@@ -496,12 +498,11 @@ def gmix_set_from_sums_fixcen(gmix,
         # be positive.  We may be able to relax this
 
         if irr < 0.0 or icc < 0.0:
-            irr, irc, icc = 0.0001, 0.0, 0.0001
+            irr, irc, icc = minval, 0.0, minval
 
         # this causes oscillations in likelihood
         det = irr*icc - irc**2
         if det < GMIX_LOW_DETVAL:
-            # irr, irc, icc = 0.0001, 0.0, 0.0001
             T = irr + icc
             irr = icc = T/2
             irc = 0.0
