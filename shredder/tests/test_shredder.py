@@ -317,11 +317,16 @@ def test_shredder_bad_columns(seed, show=False):
 
 
 if __name__ == '__main__':
-    seed = 500
+    # seed = 500
     # seed = 250
     # seed = np.random.randint(0, 2**10)
     # test_shredder_smoke(seed, False, show=True)
     # test_shredder(seed)
     # test_shredder_bad_columns(seed, show=True)
     # test_shredder_stars_gaussian(seed, show=True)
-    test_shredder_stars_moffat(seed, show=True)
+    # test_shredder_stars_moffat(seed, show=True)
+
+    seed = 813
+    rng = np.random.RandomState(seed)
+    for i in range(100):
+        test_shredder_stars_moffat(rng.randint(0, 2**16))
