@@ -1,3 +1,6 @@
+"""
+TODO have minflux be configurable from shredx
+"""
 import logging
 import numpy as np
 import ngmix
@@ -61,7 +64,7 @@ def get_guess(objs,
             flux = objs['flux'][i]*pixel_scale**2
 
         if flux < minflux:
-            print('flux %g less than minflux %g' % (flux, minflux))
+            logger.info('flux %g less than minflux %g' % (flux, minflux))
             flux = minflux
 
         if jacobian is not None:
