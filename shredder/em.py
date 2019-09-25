@@ -178,7 +178,7 @@ class GMixEMFixCen(object):
                 'message': message,
             }
 
-        except GMixRangeError as err:
+        except (GMixRangeError, ZeroDivisionError) as err:
             message = str(err)
             logger.info(message)
             result = {
