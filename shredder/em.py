@@ -46,8 +46,8 @@ class GMixEMFixCen(object):
     """
     def __init__(self,
                  obs,
-                 miniter=10,
-                 maxiter=1000,
+                 miniter=40,
+                 maxiter=500,
                  tol=0.001,
                  vary_sky=False):
 
@@ -234,6 +234,24 @@ class GMixEMPOnly(GMixEMFixCen):
         The tolerance in the fluxes that implies convergence,
         default 0.001
     """
+
+    def __init__(self,
+                 obs,
+                 miniter=20,
+                 maxiter=500,
+                 tol=0.001,
+                 vary_sky=False):
+        """
+        over-riding because we want a different default miniter
+        """
+        super(GMixEMPOnly, self).__init__(
+            obs,
+            miniter=miniter,
+            maxiter=maxiter,
+            tol=tol,
+            vary_sky=vary_sky,
+        )
+
 
     def _set_runner(self):
         self._runner = em_run_ponly
