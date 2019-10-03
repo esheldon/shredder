@@ -18,7 +18,8 @@ from ngmix.gmix_nb import (
     gmix_eval_pixel_fast,
     GMIX_LOW_DETVAL,
 )
-from ngmix.fastexp import expd
+
+from ngmix.fastexp import exp5
 
 logger = logging.getLogger(__name__)
 
@@ -252,7 +253,6 @@ class GMixEMPOnly(GMixEMFixCen):
             vary_sky=vary_sky,
         )
 
-
     def _set_runner(self):
         self._runner = em_run_ponly
 
@@ -432,7 +432,7 @@ def do_scratch_sums_fixcen(pixel, gmix_conv, sums, ngauss_psf, taudata):
             chi2 = gauss['dcc']*v2 + gauss['drr']*u2 - 2.0*gauss['drc']*uv
 
             if chi2 < 25.0 and chi2 >= 0.0:
-                val = gauss['pnorm']*expd(-0.5*chi2)
+                val = gauss['pnorm']*exp5(-0.5*chi2)
             else:
                 val = 0.0
 
@@ -709,7 +709,7 @@ def do_scratch_sums_ponly(pixel, gmix_conv, sums, ngauss_psf):
             chi2 = gauss['dcc']*v2 + gauss['drr']*u2 - 2.0*gauss['drc']*uv
 
             if chi2 < 25.0 and chi2 >= 0.0:
-                val = gauss['pnorm']*expd(-0.5*chi2)
+                val = gauss['pnorm']*exp5(-0.5*chi2)
             else:
                 val = 0.0
 

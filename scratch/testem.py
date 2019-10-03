@@ -28,7 +28,7 @@ from ngmix.gmix_nb import (
     gauss2d_set_norm,
     GMIX_LOW_DETVAL,
 )
-from ngmix.fastexp import expd
+from ngmix.fastexp import exp5
 import biggles
 import plotting
 import images
@@ -208,7 +208,7 @@ def do_scratch_sums_fixcen(pixel, gmix, sums):
             gauss['dcc']*v2 + gauss['drr']*u2 - 2.0*gauss['drc']*uv
 
         if chi2 < 25.0 and chi2 >= 0.0:
-            tsums['gi'] = gauss['pnorm']*expd(-0.5*chi2)
+            tsums['gi'] = gauss['pnorm']*exp5(-0.5*chi2)
         else:
             tsums['gi'] = 0.0
 
@@ -720,7 +720,7 @@ def do_scratch_sums_fixsize(pixel, gmix, sums):
             gauss['dcc']*v2 + gauss['drr']*u2 - 2.0*gauss['drc']*uv
 
         if chi2 < 25.0 and chi2 >= 0.0:
-            tsums['gi'] = gauss['pnorm']*expd(-0.5*chi2)
+            tsums['gi'] = gauss['pnorm']*exp5(-0.5*chi2)
         else:
             tsums['gi'] = 0.0
 
@@ -1063,7 +1063,7 @@ def do_scratch_sums_ponly(pixel, gmix, sums):
             gauss['dcc']*v2 + gauss['drr']*u2 - 2.0*gauss['drc']*uv
 
         if chi2 < 25.0 and chi2 >= 0.0:
-            tsums['gi'] = gauss['pnorm']*expd(-0.5*chi2)
+            tsums['gi'] = gauss['pnorm']*exp5(-0.5*chi2)
         else:
             tsums['gi'] = 0.0
 
