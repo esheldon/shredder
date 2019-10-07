@@ -1,3 +1,5 @@
+__version__ = 'v0.9.0'
+
 from . import em
 from . import coadding
 from . import shredding
