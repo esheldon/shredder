@@ -6,11 +6,12 @@ we run
 import logging
 import ngmix
 from .em import GMixEMFixCen
+from .sexceptions import PSFFailure
 
 logger = logging.getLogger(__name__)
 
 
-def do_psf_fit(obs, ngauss, rng=None):
+def do_psf_fit(obs, ngauss, ntry=4, rng=None):
     """
     fit the obs to a psf modle and set the mixture
 
@@ -71,6 +72,14 @@ def do_psf_fit(obs, ngauss, rng=None):
                 gmix1 = runner1.fitter.get_gmix()
                 row, col = gmix1.get_cen()
 
+            imsky, sky = ngmix.em.prep_image(psf_obs.image)
+            emobs = ngmix.Observation(
+                imsky,
+                weight=psf_obs.weight,
+                jacobian=psf_obs.jacobian,
+            )
+
+            # for guesses
             orunner = ngmix.bootstrap.EMRunner(
                 psf_obs,
                 Tguess,
@@ -78,43 +87,45 @@ def do_psf_fit(obs, ngauss, rng=None):
                 {},
                 rng=rng,
             )
-            guess = orunner.get_guess()
-            gdata = guess.get_data()
 
-            # first we must put all at the same center
-            gdata['row'] = 0.0
-            gdata['col'] = 0.0
+            for i in range(ntry):
+                guess = orunner.get_guess()
+                gdata = guess.get_data()
 
-            # now offset the centers all together
-            if do_cen:
-                print('setting cen:', row, col)
-                guess.set_cen(row, col)
+                # first we must put all at the same center
+                gdata['row'] = 0.0
+                gdata['col'] = 0.0
 
-            if do_offset:
-                off = 0.001*scale
-                n = gdata.size
-                gdata['row'] += rng.uniform(low=-off, high=off, size=n)
-                gdata['col'] += rng.uniform(low=-off, high=off, size=n)
+                # now offset the centers all together
+                if do_cen:
+                    print('setting cen:', row, col)
+                    guess.set_cen(row, col)
 
-            imsky, sky = ngmix.em.prep_image(psf_obs.image)
-            emobs = ngmix.Observation(
-                imsky,
-                weight=psf_obs.weight,
-                jacobian=psf_obs.jacobian,
-            )
-            fitter = GMixEMFixCen(
-                emobs,
-                miniter=20,
-                tol=1.0e-4,
-            )
+                # tweaks to offsets to avoid degeneracies
+                if do_offset:
+                    off = 0.001*scale
+                    n = gdata.size
+                    gdata['row'] += rng.uniform(low=-off, high=off, size=n)
+                    gdata['col'] += rng.uniform(low=-off, high=off, size=n)
 
-            fitter.go(guess, sky)
+                fitter = GMixEMFixCen(
+                    emobs,
+                    miniter=20,
+                    tol=1.0e-4,
+                )
 
-        res = fitter.get_result()
-        logger.debug(res)
+                fitter.go(guess, sky)
 
-        if res['flags'] != 0:
-            raise RuntimeError('psf fitting failed')
+                res = fitter.get_result()
+                logger.debug(res)
+
+                if res['flags'] == 0:
+                    break
+                else:
+                    logger.info('retrying psf fit')
+
+            if res['flags'] != 0:
+                raise PSFFailure('psf fitting failed: %s' % str(res))
 
         gmix = fitter.get_gmix()
         psf_obs.set_gmix(gmix)
