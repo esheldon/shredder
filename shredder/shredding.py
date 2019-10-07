@@ -11,6 +11,7 @@ from . import procflags
 from . import coadding
 from . import vis
 from .psf_fitting import do_psf_fit
+from .sexceptions import PSFFailure
 
 logger = logging.getLogger(__name__)
 
@@ -61,19 +62,6 @@ class Shredder(object):
 
         self._rng = rng
 
-        if fill_zero_weight:
-            self._ignore_zero_weight = False
-        else:
-            self._ignore_zero_weight = True
-
-        do_psf_fit(self.mbobs, psf_ngauss, rng=self._rng)
-
-        self.coadd_obs = coadding.make_coadd_obs(
-            self.mbobs,
-            ignore_zero_weight=self._ignore_zero_weight,
-        )
-        do_psf_fit(self.coadd_obs, psf_ngauss, rng=self._rng)
-
         self.miniter = miniter
         self.maxiter = maxiter
 
@@ -82,6 +70,20 @@ class Shredder(object):
 
         self.tol = tol
         self.vary_sky = vary_sky
+
+        if fill_zero_weight:
+            self._ignore_zero_weight = False
+        else:
+            self._ignore_zero_weight = True
+
+        self.coadd_psfres = self._do_psf_fits(self.mbobs, psf_ngauss)
+
+        self.coadd_obs = coadding.make_coadd_obs(
+            self.mbobs,
+            ignore_zero_weight=self._ignore_zero_weight,
+        )
+
+        self.band_psfres = self._do_psf_fits(self.coadd_obs, psf_ngauss)
 
     def get_result(self):
         """
@@ -141,10 +143,18 @@ class Shredder(object):
             A guess for the deblending
         """
 
-        em_coadd = self._do_coadd_fit(gmix_guess)
-
         self._result = {'flags': 0}
         res = self._result
+
+        if self.coadd_psfres['flags'] != 0:
+            res['flags'] = self.coadd_psfres['flags']
+            return
+
+        elif self.band_psfres['flags'] != 0:
+            res['flags'] = self.band_psfres['flags']
+            return
+
+        em_coadd = self._do_coadd_fit(gmix_guess)
 
         cres = em_coadd.get_result()
         logger.info('coadd: %s' % repr(cres))
@@ -283,3 +293,17 @@ class Shredder(object):
             gdata['p'][idata] *= (1.0 + rnum)
 
         return gmix_guess
+
+    def _do_psf_fits(self, mbobs, psf_ngauss):
+        """
+        perform psf fits, catching errors
+        """
+
+        try:
+            do_psf_fit(mbobs, psf_ngauss, rng=self._rng)
+            flags = 0
+        except PSFFailure as err:
+            logger.info(str(err))
+            flags = procflags.PSF_FAILURE
+
+        return {'flags': flags}
