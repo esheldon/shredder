@@ -1,4 +1,4 @@
-from distutils.core import setup
+from setuptools import setup, find_packages
 
 setup(
     name='shredder',
@@ -7,5 +7,5 @@ setup(
     license='GPL',
     author='Erin Scott Sheldon',
     author_email='erin.sheldon@gmail.com',
-    packages=['shredder'],
+    packages=find_packages(),
 )
