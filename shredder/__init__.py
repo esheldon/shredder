@@ -1,5 +1,5 @@
 # flake8: noqa
-__version__ = 'v0.9.0'
+__version__ = 'v1.0.0'
 
 from . import coadding
 from . import shredding
