@@ -181,7 +181,7 @@ def make_rgb(imlist, wtlist, nonlinear=0.12, scale=0.0005):
     gminval = noise_fac*np.sqrt(1/wtlist[1][0, 0])
     bminval = noise_fac*np.sqrt(1/wtlist[0][0, 0])
 
-    minval = min(rminval, gminval, bminval)
+    # minval = min(rminval, gminval, bminval)
     minval = 0
 
     r = imlist[2].clip(min=minval)
