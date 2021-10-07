@@ -1,12 +1,8 @@
 import numpy as np
 import logging
 import ngmix
-from ngmix.em import EM_MAXITER
+from ngmix.flags import EM_MAXITER
 
-from .em import (
-    GMixEMFixCen,
-    GMixEMPOnly,
-)
 from . import procflags
 from . import coadding
 from . import vis
@@ -26,7 +22,6 @@ class Shredder(object):
                  flux_maxiter=500,
                  vary_sky=False,
                  tol=0.001,
-                 fill_zero_weight=True,
                  rng=None):
         """
         Parameters
@@ -45,9 +40,6 @@ class Shredder(object):
             The tolerance in the weighted logL, default 1.e-3
         vary_sky: bool
             If True, vary the sky
-        fill_zero_weight: bool, optional
-            If True, fill in zero weight pixels with the model on each
-            iteration. Default True
         rng: random number generator
             E.g. np.random.RandomState.
         """
@@ -71,17 +63,9 @@ class Shredder(object):
         self.tol = tol
         self.vary_sky = vary_sky
 
-        if fill_zero_weight:
-            self._ignore_zero_weight = False
-        else:
-            self._ignore_zero_weight = True
-
         self.coadd_psfres = self._do_psf_fits(self.mbobs, psf_ngauss)
 
-        self.coadd_obs = coadding.make_coadd_obs(
-            self.mbobs,
-            ignore_zero_weight=self._ignore_zero_weight,
-        )
+        self.coadd_obs = coadding.make_coadd_obs(self.mbobs)
 
         self.band_psfres = self._do_psf_fits(self.coadd_obs, psf_ngauss)
 
@@ -154,24 +138,24 @@ class Shredder(object):
             res['flags'] = self.band_psfres['flags']
             return
 
-        em_coadd = self._do_coadd_fit(gmix_guess)
+        coadd_result = self._do_coadd_fit(gmix_guess)
 
-        cres = em_coadd.get_result()
-        logger.info('coadd: %s' % repr(cres))
+        logger.info('coadd: %s' % repr(coadd_result))
 
-        res['coadd_result'] = cres
-        res['coadd_fitter'] = em_coadd
-
+        res['coadd_result'] = coadd_result
         res['coadd_psf_gmix'] = self.coadd_obs.psf.gmix.copy()
 
-        if em_coadd.has_gmix():
-            res['coadd_gmix'] = em_coadd.get_gmix()
-            res['coadd_gmix_convolved'] = em_coadd.get_convolved_gmix()
+        if coadd_result.has_gmix():
+            res['coadd_gmix'] = coadd_result.get_gmix()
+            res['coadd_gmix_convolved'] = coadd_result.get_convolved_gmix()
         else:
             res['coadd_gmix'] = None
             res['coadd_gmix_convolved'] = None
 
-        if cres['flags'] != 0 and cres['flags'] & EM_MAXITER == 0:
+        if (
+            coadd_result['flags'] != 0 and
+            coadd_result['flags'] & EM_MAXITER == 0
+        ):
             # we cannot proceed without the coadd fit
             res['flags'] |= procflags.COADD_FAILURE
         else:
@@ -182,29 +166,16 @@ class Shredder(object):
         run the fixed-center em fitter on the coadd image
         """
 
-        coadd_obs = self.coadd_obs
+        emobs, sky = ngmix.em.prep_obs(self.coadd_obs)
 
-        imsky, sky = ngmix.em.prep_image(coadd_obs.image)
-
-        emobs = ngmix.Observation(
-            imsky,
-            weight=coadd_obs.weight,
-            jacobian=coadd_obs.jacobian,
-            psf=coadd_obs.psf,
-            ignore_zero_weight=self._ignore_zero_weight,
-        )
-
-        em = GMixEMFixCen(
-            emobs,
+        em = ngmix.em.EMFitterFixCen(
             miniter=self.miniter,
             maxiter=self.maxiter,
             tol=self.tol,
             vary_sky=self.vary_sky,
         )
 
-        em.go(gmix_guess, sky)
-
-        return em
+        return em.go(obs=emobs, guess=gmix_guess, sky=sky)
 
     def _do_multiband_fit(self):
         """
@@ -213,7 +184,6 @@ class Shredder(object):
         res = self._result
 
         reslist = []
-        fitters = []
         pgmlist = []
         gmlist = []
         gmclist = []
@@ -223,22 +193,22 @@ class Shredder(object):
 
             pgmlist.append(obs.psf.gmix.copy())
 
-            em = self._get_band_fit(obs)
-            fitters.append(em)
+            band_result = self._get_band_fit(obs)
 
-            bres = em.get_result()
+            logger.info('band %d: %s' % (band, repr(band_result)))
 
-            logger.info('band %d: %s' % (band, repr(bres)))
-
-            if bres['flags'] != 0 and bres['flags'] & EM_MAXITER == 0:
+            if (
+                band_result['flags'] != 0 and
+                band_result['flags'] & EM_MAXITER == 0
+            ):
                 logger.info('could not get flux fit for band %d' % band)
                 res['flags'] |= procflags.BAND_FAILURE
 
-            reslist.append(bres)
+            reslist.append(band_result)
 
-            if em.has_gmix():
-                gm = em.get_gmix()
-                gm_convolved = em.get_convolved_gmix()
+            if band_result.has_gmix():
+                gm = band_result.get_gmix()
+                gm_convolved = band_result.get_convolved_gmix()
             else:
                 gm = None
                 gm_convolved = None
@@ -247,7 +217,6 @@ class Shredder(object):
             gmclist.append(gm_convolved)
 
         res['band_results'] = reslist
-        res['band_fitters'] = fitters
         res['band_psf_gmix'] = pgmlist
         res['band_gmix'] = gmlist
         res['band_gmix_convolved'] = gmclist
@@ -257,17 +226,9 @@ class Shredder(object):
         get the flux-only fit for a band
         """
 
-        imsky, sky = ngmix.em.prep_image(obs.image)
+        emobs, sky = ngmix.em.prep_obs(obs)
 
-        emobs = ngmix.Observation(
-            imsky,
-            weight=obs.weight,
-            jacobian=obs.jacobian,
-            psf=obs.psf,
-            ignore_zero_weight=self._ignore_zero_weight,
-        )
-        em = GMixEMPOnly(
-            emobs,
+        em = ngmix.em.EMFitterFluxOnly(
             miniter=self.flux_miniter,
             maxiter=self.flux_maxiter,
             tol=self.tol,
@@ -276,9 +237,7 @@ class Shredder(object):
 
         gm_guess = self._get_band_guess()
 
-        em.go(gm_guess, sky)
-
-        return em
+        return em.go(obs=emobs, guess=gm_guess, sky=sky)
 
     def _get_band_guess(self):
         """

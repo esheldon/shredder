@@ -1,6 +1,6 @@
+# flake8: noqa
 __version__ = 'v0.9.0'
 
-from . import em
 from . import coadding
 from . import shredding
 from . import procflags

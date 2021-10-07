@@ -295,25 +295,22 @@ def test_shredder_bad_columns(seed, show=False):
         rng=rng,
     )
 
-    for fill_zero_weight in [False, True]:
-        s = shredder.Shredder(
-            obs=mbobs,
-            psf_ngauss=psf_ngauss,
-            rng=rng,
-            fill_zero_weight=fill_zero_weight,
-        )
-        s.shred(gm_guess)
+    s = shredder.Shredder(
+        obs=mbobs,
+        psf_ngauss=psf_ngauss,
+        rng=rng,
+    )
+    s.shred(gm_guess)
 
-        res = s.get_result()
-        assert res['flags'] == 0
-        cres = res['coadd_result']
-        print(cres['numiter'], cres['fdiff'])
-        for bres in res['band_results']:
-            print(bres['numiter'], bres['fdiff'])
+    res = s.get_result()
+    assert res['flags'] == 0
+    cres = res['coadd_result']
+    print(cres['numiter'], cres['fdiff'])
+    for bres in res['band_results']:
+        print(bres['numiter'], bres['fdiff'])
 
-        if show:
-            title = 'fill: %s' % fill_zero_weight
-            s.plot_comparison(show=True, title=title)
+    if show:
+        s.plot_comparison(show=True)
 
 
 if __name__ == '__main__':
@@ -326,7 +323,9 @@ if __name__ == '__main__':
     # test_shredder_stars_gaussian(seed, show=True)
     # test_shredder_stars_moffat(seed, show=True)
 
+    show = True
     seed = 813
     rng = np.random.RandomState(seed)
     for i in range(100):
-        test_shredder_stars_moffat(rng.randint(0, 2**16))
+        # test_shredder_stars_moffat(rng.randint(0, 2**16))
+        test_shredder_bad_columns(rng.randint(0, 2**16), show=show)

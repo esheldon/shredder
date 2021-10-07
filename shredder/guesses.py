@@ -2,18 +2,19 @@
 TODO have minflux be configurable from shredx
 """
 import logging
-import numpy as np
 import ngmix
 
 logger = logging.getLogger(__name__)
 
 
-def get_guess(objs,
-              minflux=0.01,
-              jacobian=None,
-              pixel_scale=1.0,
-              model='dev',
-              rng=None):
+def get_guess(
+    objs,
+    rng,
+    minflux=0.01,
+    jacobian=None,
+    pixel_scale=1.0,
+    model='dev',
+):
     """
     get a full gaussian mixture guess based on an input object list
 
@@ -25,6 +26,8 @@ def get_guess(objs,
               TODO may want to make row, col in arcsec
             - x, y, x2, y2 all in pixel units and flux in flux units
             - these should be in zero-offset coordinates
+    rng: np.random.RandomState
+        optional random number generator
     minflux: float, optional
         Minimum flux allowed. Default 1.0
     pixel_scale: float
@@ -32,14 +35,9 @@ def get_guess(objs,
     model: string, optional
         model for distribution gaussian sizes around each object
         center.  'exp', 'dev', 'bdf', 'bd'
-    rng: np.random.RandomState, optional
-        optional random number generator
     """
 
-    if rng is None:
-        ur = np.random.uniform
-    else:
-        ur = rng.uniform
+    ur = rng.uniform
 
     if jacobian is not None:
         pixel_scale = jacobian.scale
@@ -52,7 +50,7 @@ def get_guess(objs,
             Tguess = objs['T'][i]  # *pixel_scale**2
             row = objs['row'][i]
             col = objs['col'][i]
-            flux = objs['flux'][i]  # *pixel_scale**2
+            flux = objs['flux'][i]
         else:
             x2 = objs['x2'][i]
             y2 = objs['y2'][i]
@@ -61,7 +59,7 @@ def get_guess(objs,
             row = objs['y'][i]
             col = objs['x'][i]
 
-            flux = objs['flux'][i]*pixel_scale**2
+            flux = objs['flux'][i]
 
         if flux < minflux:
             logger.info('flux %g less than minflux %g' % (flux, minflux))

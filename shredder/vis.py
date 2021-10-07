@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import tempfile
+from matplotlib import pyplot as mplt
 
 
 def view_mbobs(mbobs, scale=2, show=False, **kw):
@@ -18,7 +19,7 @@ def view_rgb(imlist, wtlist, scale=2, show=False, **kw):
     """
     view rgb data
     """
-    import images
+    from espy import images
 
     rgb = make_rgb(imlist, wtlist, scale=scale)
     plt = images.view(rgb, show=show, **kw)
@@ -106,8 +107,6 @@ def compare_rgb_images(image,
     """
     make a comparison of the image with the model
     """
-    import biggles
-    import images
 
     if chi2per is not None:
         diff_title = 'chi2/dof: %.2f' % chi2per
@@ -120,14 +119,14 @@ def compare_rgb_images(image,
     nrows = 2
     if seg is not None and weight is not None:
         ncols = 3
-        arat = image.shape[1]/image.shape[0] * 2/3
+        # arat = image.shape[1]/image.shape[0] * 2/3
 
         diffrow, diffcol = 0, 2
         segrow, segcol = 1, 0
         wtrow, wtcol = 1, 1
     else:
         ncols = 2
-        arat = image.shape[1]/image.shape[0]
+        # arat = image.shape[1]/image.shape[0]
 
         diffrow, diffcol = 1, 0
 
@@ -136,41 +135,34 @@ def compare_rgb_images(image,
         elif weight is not None:
             wtrow, wtcol = 1, 1
 
-    tab = biggles.Table(nrows, ncols, aspect_ratio=arat)
+    fig, axs = mplt.subplots(nrows=nrows, ncols=ncols)
 
+    axs[imrow, imcol].imshow(image)
+    axs[imrow, imcol].set_title('image')
 
-    tab[imrow, imcol] = images.view(
-        image,  # /maxval,
-        show=False,
-        title='image',
-    )
-    tab[modrow, modcol] = images.view(
-        model,  # /maxval,
-        show=False,
-        title='model',
-    )
+    axs[modrow, modcol].imshow(model)
+    axs[modrow, modcol].set_title('model')
 
-    tab[diffrow, diffcol] = images.view(
-        diffim,
-        show=False,
-        title=diff_title,
-    )
+    axs[diffrow, diffcol].imshow(diffim)
+    axs[diffrow, diffcol].set_title(diff_title)
 
     if seg is not None:
-        tab[segrow, segcol] = plot_seg(seg, rng=rng, width=width, title='seg')
+        plot_seg(seg, ax=axs[segrow, segcol], rng=rng)
+        axs[segrow, segcol].set_title('seg')
 
     if weight is not None:
-        tab[wtrow, wtcol] = images.view(weight, show=False, title='weight')
+        axs[wtrow, wtcol].imshow(weight)
+        axs[wtrow, wtcol].set_title('weight')
 
     if title is not None:
-        tab.title = title
+        fig.suptitle(title)
 
     if show:
         fname = tempfile.mktemp(suffix='.png')
-        tab.write_img(width, width*arat, fname)
+        fig.savefig(fname, dpi=150)
         show_image(fname)
 
-    return tab
+    return fig
 
 
 def show_image(fname):
@@ -184,7 +176,7 @@ def make_rgb(imlist, wtlist, nonlinear=0.12, scale=0.0005):
     """
     make an rgb image using the input images and weights
     """
-    import images
+    from espy import images
 
     # relative_scales = np.array([1.1, 1.0, 2.0])
     relative_scales = np.array([1.0, 1.0, 2.0])
@@ -214,11 +206,10 @@ def make_rgb(imlist, wtlist, nonlinear=0.12, scale=0.0005):
     return rgb
 
 
-def plot_seg(segin, title=None, width=1000, rng=None, show=False):
+def plot_seg(segin, ax, rng=None):
     """
     plot the seg map with randomized colors
     """
-    import images
 
     seg = np.transpose(segin)
 
@@ -242,15 +233,4 @@ def plot_seg(segin, title=None, width=1000, rng=None, show=False):
         cseg[w[0], w[1], 1] = g
         cseg[w[0], w[1], 2] = b
 
-    plt = images.view(cseg, show=False)
-
-    if title is not None:
-        plt.title = title
-
-    if show:
-        srat = seg.shape[1]/seg.shape[0]
-        fname = tempfile.mktemp(suffix='.png')
-        plt.write_img(width, width*srat, fname)
-        show_image(fname)
-
-    return plt
+    ax.imshow(cseg)

@@ -5,7 +5,6 @@ we run
 
 import logging
 import ngmix
-from .em import GMixEMFixCen
 from .sexceptions import PSFFailure
 
 logger = logging.getLogger(__name__)
@@ -13,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 def do_psf_fit(obs, ngauss, ntry=4, rng=None):
     """
-    fit the obs to a psf modle and set the mixture
+    fit the obs to a psf model and set the mixture
 
     Parameters
     ----------
@@ -39,7 +38,6 @@ def do_psf_fit(obs, ngauss, ntry=4, rng=None):
         psf_obs = obs.psf
 
         scale = psf_obs.jacobian.scale
-        Tguess = 4.0*scale
         lm_pars = {
             'xtol': 1.0e-5,
             'ftol': 1.0e-5,
@@ -47,59 +45,39 @@ def do_psf_fit(obs, ngauss, ntry=4, rng=None):
         }
 
         if ngauss == 1:
-            runner = ngmix.bootstrap.PSFRunner(
-                psf_obs,
-                'gauss',
-                Tguess,
-                lm_pars,
+            guesser = ngmix.guessers.SimplePSFGuesser(
                 rng=rng,
+                guess_from_moms=True,
             )
-            runner.go(ntry=4)
-            fitter = runner.fitter
+            fitter = ngmix.fitting.Fitter(model='gauss', fit_pars=lm_pars)
+            runner = ngmix.runners.PSFRunner(
+                fitter=fitter,
+                guesser=guesser,
+                ntry=ntry,
+            )
+            res = runner.go(psf_obs)
         else:
-            do_cen = False
             do_offset = True
 
-            if do_cen:
-                runner1 = ngmix.bootstrap.PSFRunner(
-                    psf_obs,
-                    'gauss',
-                    Tguess,
-                    lm_pars,
-                    rng=rng,
-                )
-                runner1.go(ntry=4)
-                gmix1 = runner1.fitter.get_gmix()
-                row, col = gmix1.get_cen()
+            emobs, sky = ngmix.em.prep_obs(psf_obs)
 
-            imsky, sky = ngmix.em.prep_image(psf_obs.image)
-            emobs = ngmix.Observation(
-                imsky,
-                weight=psf_obs.weight,
-                jacobian=psf_obs.jacobian,
-            )
-
-            # for guesses
-            orunner = ngmix.bootstrap.EMRunner(
-                psf_obs,
-                Tguess,
-                ngauss,
-                {},
+            guesser = ngmix.guessers.GMixPSFGuesser(
                 rng=rng,
+                ngauss=ngauss,
+                guess_from_moms=True,
             )
 
             for i in range(ntry):
-                guess = orunner.get_guess()
+                guess = guesser(psf_obs)
                 gdata = guess.get_data()
 
+                # we assume it is centered; we make our guesses
+                # centered, used fixed cen fitter, but add
+                # slight offsets to avoid degeneracies
                 # first we must put all at the same center
+
                 gdata['row'] = 0.0
                 gdata['col'] = 0.0
-
-                # now offset the centers all together
-                if do_cen:
-                    print('setting cen:', row, col)
-                    guess.set_cen(row, col)
 
                 # tweaks to offsets to avoid degeneracies
                 if do_offset:
@@ -108,15 +86,13 @@ def do_psf_fit(obs, ngauss, ntry=4, rng=None):
                     gdata['row'] += rng.uniform(low=-off, high=off, size=n)
                     gdata['col'] += rng.uniform(low=-off, high=off, size=n)
 
-                fitter = GMixEMFixCen(
-                    emobs,
+                fitter = ngmix.em.EMFitterFixCen(
                     miniter=20,
                     tol=1.0e-4,
                 )
 
-                fitter.go(guess, sky)
+                res = fitter.go(obs=emobs, guess=guess, sky=sky)
 
-                res = fitter.get_result()
                 logger.debug(res)
 
                 if res['flags'] == 0:
@@ -124,10 +100,10 @@ def do_psf_fit(obs, ngauss, ntry=4, rng=None):
                 else:
                     logger.info('retrying psf fit')
 
-            if res['flags'] != 0:
-                raise PSFFailure('psf fitting failed: %s' % str(res))
+        if res['flags'] != 0:
+            raise PSFFailure('psf fitting failed: %s' % str(res))
 
-        gmix = fitter.get_gmix()
+        gmix = res.get_gmix()
         psf_obs.set_gmix(gmix)
 
         logger.debug('psf T: %g' % gmix.get_T())
