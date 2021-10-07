@@ -35,8 +35,6 @@ def test_shredder_smoke(seed, vary_sky, show=False):
     test we can run end to end
     """
 
-    shredder.setup_logging('debug')
-
     rng = np.random.RandomState(seed)
 
     sim = shredder.sim.Sim(rng=rng)
@@ -70,10 +68,10 @@ def test_shredder_smoke(seed, vary_sky, show=False):
     s.shred(gm_guess)
 
     res = s.get_result()
-    print('coadd:', res['coadd_result'])
+    logger.info('coadd: %s', res['coadd_result'])
     assert res['flags'] == 0
     for band, band_result in enumerate(res['band_results']):
-        print(band, band_result)
+        logger.info('%s %s', band, band_result)
 
     if show:
         title = 'vary sky: %s' % vary_sky
@@ -121,10 +119,10 @@ def test_shredder_stars_gaussian(seed, show=False):
         s.plot_comparison(show=True, title='gaussians stars')
 
     res = s.get_result()
-    print('coadd:', res['coadd_result'])
+    logger.info('coadd: %s', res['coadd_result'])
     assert res['flags'] == 0
     for band, band_result in enumerate(res['band_results']):
-        print(band, band_result)
+        logger.info('%s %s', band, band_result)
 
     models = s.get_model_images()
 
@@ -150,8 +148,6 @@ def test_shredder_stars_moffat(seed, show=False):
     Test with sim a gaussian psf and stars, fitting
     gaussian to both object and psf
     """
-
-    # shredder.setup_logging('debug')
 
     rng = np.random.RandomState(seed)
     guess_model = 'gauss'
@@ -190,12 +186,12 @@ def test_shredder_stars_moffat(seed, show=False):
         s.plot_comparison(show=True, title='moffat stars')
 
     res = s.get_result()
-    print('coadd:', res['coadd_result'])
-    print('gmix:')
-    print(res['coadd_gmix'])
+    logger.info('coadd: %s', res['coadd_result'])
+    logger.info('gmix:')
+    logger.info(res['coadd_gmix'])
     assert res['flags'] == 0
     for band, band_result in enumerate(res['band_results']):
-        print(band, band_result)
+        logger.info('%s %s', band, band_result)
 
     models = s.get_model_images()
 
@@ -243,9 +239,9 @@ def test_shredder(seed):
     s.shred(gm_guess)
 
     res = s.get_result()
-    print('coadd:', res['coadd_result'])
+    logger.info('coadd: %s', res['coadd_result'])
     for band, band_result in enumerate(res['band_results']):
-        print(band, band_result)
+        logger.info('%s %s', band, band_result)
 
     assert res['flags'] == 0
 
@@ -273,7 +269,7 @@ def test_shredder_bad_columns(seed, show=False):
     test with bad column
     """
 
-    print('seed:', seed)
+    logger.info('seed: %s', seed)
 
     rng = np.random.RandomState(seed)
     sim = shredder.sim.Sim(rng=rng)
@@ -305,13 +301,12 @@ def test_shredder_bad_columns(seed, show=False):
     res = s.get_result()
     assert res['flags'] == 0
     cres = res['coadd_result']
-    print(cres['numiter'], cres['fdiff'])
+    logger.info('%s %s', cres['numiter'], cres['fdiff'])
     for bres in res['band_results']:
-        print(bres['numiter'], bres['fdiff'])
+        logger.info('%s %s', bres['numiter'], bres['fdiff'])
 
     if show:
         s.plot_comparison(show=True)
-        input('hit enter')
 
 
 if __name__ == '__main__':
@@ -323,6 +318,8 @@ if __name__ == '__main__':
     # test_shredder_bad_columns(seed, show=True)
     # test_shredder_stars_gaussian(seed, show=True)
     # test_shredder_stars_moffat(seed, show=True)
+
+    shredder.setup_logging('info')
 
     show = True
     seed = 813

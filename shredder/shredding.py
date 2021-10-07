@@ -1,4 +1,3 @@
-import numpy as np
 import logging
 import ngmix
 from ngmix.flags import EM_MAXITER
@@ -13,21 +12,27 @@ logger = logging.getLogger(__name__)
 
 
 class Shredder(object):
-    def __init__(self, *,
-                 obs,
-                 psf_ngauss,
-                 miniter=40,
-                 maxiter=500,
-                 flux_miniter=20,
-                 flux_maxiter=500,
-                 vary_sky=False,
-                 tol=0.001,
-                 rng=None):
+    def __init__(
+        self,
+        obs,
+        psf_ngauss,
+        rng,
+        miniter=40,
+        maxiter=500,
+        flux_miniter=20,
+        flux_maxiter=500,
+        tol=0.001,
+        vary_sky=False,
+    ):
         """
         Parameters
         ----------
         obs: observations
             Typcally an ngmix.MultiBandObsList
+        psf_ngauss: int
+            Number of gaussians for psf
+        rng: random number generator
+            E.g. np.random.RandomState.
         miniter: int, optional
             Mininum number of iterations, default 40
         maxiter: int, optional
@@ -38,10 +43,8 @@ class Shredder(object):
             Maximum number of iterations for flux fits, default 1000
         tol: number, optional
             The tolerance in the weighted logL, default 1.e-3
-        vary_sky: bool
+        vary_sky: bool, optional
             If True, vary the sky
-        rng: random number generator
-            E.g. np.random.RandomState.
         """
 
         # TODO deal with Observation input, which would only use
@@ -49,10 +52,7 @@ class Shredder(object):
 
         self.mbobs = obs
 
-        if rng is None:
-            rng = np.random.RandomState()
-
-        self._rng = rng
+        self.rng = rng
 
         self.miniter = miniter
         self.maxiter = maxiter
@@ -243,7 +243,7 @@ class Shredder(object):
         """
         get a guess for the band based on the coadd mixture
         """
-        rng = self._rng
+        rng = self.rng
         gmix_guess = self._result['coadd_gmix'].copy()
 
         gdata = gmix_guess.get_data()
@@ -259,7 +259,7 @@ class Shredder(object):
         """
 
         try:
-            do_psf_fit(mbobs, psf_ngauss, rng=self._rng)
+            do_psf_fit(mbobs, psf_ngauss, rng=self.rng)
             flags = 0
         except PSFFailure as err:
             logger.info(str(err))

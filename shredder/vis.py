@@ -1,6 +1,4 @@
-import os
 import numpy as np
-import tempfile
 from matplotlib import pyplot as mplt
 
 
@@ -154,22 +152,17 @@ def compare_rgb_images(image,
         axs[wtrow, wtcol].imshow(weight)
         axs[wtrow, wtcol].set_title('weight')
 
+    if seg is not None and weight is not None:
+        axs[-1, -1].axis('off')
+
     if title is not None:
         fig.suptitle(title)
 
     if show:
-        fname = tempfile.mktemp(suffix='.png')
-        fig.savefig(fname, dpi=150)
-        show_image(fname)
-
-    return fig
-
-
-def show_image(fname):
-    """
-    show the image using an external viewer
-    """
-    os.system('feh --force-aliasing -B black %s &' % fname)
+        mplt.show()
+        mplt.close(fig)
+    else:
+        return fig
 
 
 def make_rgb(imlist, wtlist, nonlinear=0.12, scale=0.0005):
