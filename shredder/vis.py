@@ -2,7 +2,7 @@ import numpy as np
 from matplotlib import pyplot as mplt
 
 
-def view_mbobs(mbobs, scale=2, show=False, **kw):
+def view_mbobs(mbobs, scale=0.5, show=False, **kw):
     """
     make a color image of the MultiBandObsList
     """
@@ -30,7 +30,7 @@ def compare_mbobs_and_models(mbobs,
                              width=1000,
                              rng=None,
                              title=None,
-                             scale=2,
+                             scale=0.5,
                              show=False):
     """
     generate rgb images for data and model and make
@@ -165,7 +165,7 @@ def compare_rgb_images(image,
         return fig
 
 
-def make_rgb(imlist, wtlist, nonlinear=0.12, scale=0.0005):
+def make_rgb(imlist, wtlist, nonlinear=0.12, scale=0.5):
     """
     make an rgb image using the input images and weights
     """
