@@ -196,22 +196,17 @@ def make_rgb(imlist, wtlist, nonlinear=0.12, scale=0.0005):
     b = imlist[0].clip(min=minval)
 
     rgb = images.get_color_image(
-        r.transpose(),
-        g.transpose(),
-        b.transpose(),
-        scales=scales,
+        r, g, b, scales=scales,
         nonlinear=nonlinear,
     )
     rgb.clip(max=1.0, out=rgb)
     return rgb
 
 
-def plot_seg(segin, ax, rng=None):
+def plot_seg(seg, ax, rng=None):
     """
     plot the seg map with randomized colors
     """
-
-    seg = np.transpose(segin)
 
     cseg = np.zeros((seg.shape[0], seg.shape[1], 3))
 

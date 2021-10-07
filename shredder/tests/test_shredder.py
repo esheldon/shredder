@@ -311,6 +311,7 @@ def test_shredder_bad_columns(seed, show=False):
 
     if show:
         s.plot_comparison(show=True)
+        input('hit enter')
 
 
 if __name__ == '__main__':
