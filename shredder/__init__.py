@@ -2,9 +2,14 @@
 __version__ = '1.0.0'
 
 from . import coadding
+
 from . import shredding
-from . import procflags
 from .shredding import Shredder
+
+from . import subtractor
+from .subtractor import ModelSubtractor
+
+from . import procflags
 from . import sim
 from . import vis
 from . import guesses
