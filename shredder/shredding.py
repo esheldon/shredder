@@ -1,3 +1,7 @@
+"""
+TODO
+    - consider doing psf fitting outside the shredder
+"""
 import logging
 import ngmix
 from ngmix.flags import EM_MAXITER
