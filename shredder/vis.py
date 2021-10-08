@@ -62,26 +62,31 @@ def compare_mbobs_and_models(mbobs,
     dof = npix-3
     chi2per = chi2/dof
 
-    rgb = make_rgb(
-        imlist,
-        wtlist,
-        scale=scale,
-    )
-    model_rgb = make_rgb(
-        models,
-        wtlist,
-        scale=scale,
-    )
-    diff_rgb = make_rgb(
-        difflist,
-        wtlist,
-        scale=scale,
-    )
+    if len(imlist) >= 3:
+        image = make_rgb(
+            imlist,
+            wtlist,
+            scale=scale,
+        )
+        model_image = make_rgb(
+            models,
+            wtlist,
+            scale=scale,
+        )
+        diff_image = make_rgb(
+            difflist,
+            wtlist,
+            scale=scale,
+        )
+    else:
+        image = imlist[0]
+        model_image = models[0]
+        diff_image = difflist[0]
 
-    return compare_rgb_images(
-        rgb,
-        model_rgb,
-        diff_rgb,
+    return compare_images(
+        image,
+        model_image,
+        diff_image,
         seg=seg,
         weight=wtall,
         chi2per=chi2per,
@@ -92,16 +97,18 @@ def compare_mbobs_and_models(mbobs,
     )
 
 
-def compare_rgb_images(image,
-                       model,
-                       diffim,
-                       titles=('image', 'model'),
-                       seg=None,
-                       weight=None,
-                       chi2per=None,
-                       rng=None,
-                       title=None,
-                       show=True):
+def compare_images(
+    image,
+    model,
+    diffim,
+    titles=('image', 'model'),
+    seg=None,
+    weight=None,
+    chi2per=None,
+    rng=None,
+    title=None,
+    show=True,
+):
     """
     make a comparison of the image with the model
     """
