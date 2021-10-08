@@ -51,6 +51,7 @@ class Shredder(object):
         # the "coadd" result and would not actually coadd
 
         self.mbobs = obs
+        self.psf_ngauss = psf_ngauss
 
         self.rng = rng
 
@@ -68,6 +69,13 @@ class Shredder(object):
         self.coadd_obs = coadding.make_coadd_obs(self.mbobs)
 
         self.band_psfres = self._do_psf_fits(self.coadd_obs, psf_ngauss)
+
+    @property
+    def result(self):
+        """
+        get the result dictionary
+        """
+        return self.get_result()
 
     def get_result(self):
         """
@@ -88,7 +96,7 @@ class Shredder(object):
             imlist.append(image)
         return imlist
 
-    def get_model_image(self, band=None):
+    def get_model_image(self, band):
         """
         get a model image for the specified band
         """
