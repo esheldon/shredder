@@ -2,7 +2,7 @@ import numpy as np
 from matplotlib import pyplot as mplt
 
 
-def view_mbobs(mbobs, scale=0.5, show=False, **kw):
+def view_mbobs(mbobs, scale=0.5, show=True, **kw):
     """
     make a color image of the MultiBandObsList
     """
@@ -13,7 +13,7 @@ def view_mbobs(mbobs, scale=0.5, show=False, **kw):
     return view_rgb(imlist, wtlist, scale=scale, show=show, **kw)
 
 
-def view_rgb(imlist, wtlist, scale=2, show=False, **kw):
+def view_rgb(imlist, wtlist, scale=2, show=True, **kw):
     """
     view rgb data
     """
@@ -29,8 +29,9 @@ def compare_mbobs_and_models(mbobs,
                              seg=None,
                              rng=None,
                              title=None,
+                             titles=['image', 'model'],
                              scale=0.5,
-                             show=False):
+                             show=True):
     """
     generate rgb images for data and model and make
     a comparison plot
@@ -86,6 +87,7 @@ def compare_mbobs_and_models(mbobs,
         chi2per=chi2per,
         rng=rng,
         title=title,
+        titles=titles,
         show=show,
     )
 
@@ -93,12 +95,13 @@ def compare_mbobs_and_models(mbobs,
 def compare_rgb_images(image,
                        model,
                        diffim,
+                       titles=['image', 'model'],
                        seg=None,
                        weight=None,
                        chi2per=None,
                        rng=None,
                        title=None,
-                       show=False):
+                       show=True):
     """
     make a comparison of the image with the model
     """
@@ -133,10 +136,10 @@ def compare_rgb_images(image,
     fig, axs = mplt.subplots(nrows=nrows, ncols=ncols)
 
     axs[imrow, imcol].imshow(image)
-    axs[imrow, imcol].set_title('image')
+    axs[imrow, imcol].set_title(titles[0])
 
     axs[modrow, modcol].imshow(model)
-    axs[modrow, modcol].set_title('model')
+    axs[modrow, modcol].set_title(titles[1])
 
     axs[diffrow, diffcol].imshow(diffim)
     axs[diffrow, diffcol].set_title(diff_title)

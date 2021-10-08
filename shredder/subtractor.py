@@ -1,6 +1,7 @@
 from contextlib import contextmanager
 import numpy as np
 import ngmix
+from . import vis
 
 
 class ModelSubtractor(object):
@@ -54,6 +55,21 @@ class ModelSubtractor(object):
             yield self.mbobs
         finally:
             self._add_or_subtract_model_image(index, 'subtract')
+
+    def plot_comparison(self, titles=None, **kw):
+        """
+        visualize a comparison of the model and data
+        """
+        if titles is None:
+            titles=['image', 'subtracted'],
+
+        subimages = [obslist[0].image for obslist in self.mbobs]
+        return vis.compare_mbobs_and_models(
+            self.shredder.mbobs,
+            subimages,
+            titles=titles,
+            **kw
+        )
 
     def _add_or_subtract_model_image(self, index, type):
         mbobs = self.mbobs

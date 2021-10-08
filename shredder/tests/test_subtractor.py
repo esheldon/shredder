@@ -63,20 +63,11 @@ def test_subtractor_smoke(seed, show=False):
     subtractor = shredder.ModelSubtractor(shredder=s, nobj=objs.size)
 
     if show:
-        models = [obslist[0].image for obslist in subtractor.mbobs]
-        shredder.vis.compare_mbobs_and_models(
-            s.mbobs,
-            models,
-            show=True,
-        )
+        subtractor.plot_comparison(titles=['image', 'all subtracted'])
 
         for iobj in range(objs.size):
             with subtractor.add_source(iobj):
-                shredder.vis.compare_mbobs_and_models(
-                    s.mbobs,
-                    models,
-                    show=True,
-                )
+                subtractor.plot_comparison(titles=['image', f'{iobj} added'])
 
     # res = s.get_result()
     # logger.info('coadd: %s', res['coadd_result'])
@@ -333,7 +324,7 @@ if __name__ == '__main__':
     shredder.setup_logging('info')
 
     show = True
-    seed = 813
+    seed = 53
     rng = np.random.RandomState(seed)
     for i in range(100):
         # test_shredder_stars_moffat(rng.randint(0, 2**16))
