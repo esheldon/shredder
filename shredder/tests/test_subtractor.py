@@ -28,7 +28,7 @@ def _add_T_and_scale(obj_data, scale):
     return objs
 
 
-@pytest.mark.parametrize('seed', [55, 77])
+@pytest.mark.parametrize('seed', [91, 22])
 def test_subtractor_smoke(seed, show=False):
 
     rng = np.random.RandomState(seed)
@@ -65,158 +65,17 @@ def test_subtractor_smoke(seed, show=False):
     if show:
         subtractor.plot_comparison(titles=['image', 'all subtracted'])
 
-        for iobj in range(objs.size):
-            with subtractor.add_source(iobj):
+    for iobj in range(objs.size):
+        with subtractor.add_source(iobj):
+            if show:
                 subtractor.plot_comparison(titles=['image', f'{iobj} added'])
-
-    # res = s.get_result()
-    # logger.info('coadd: %s', res['coadd_result'])
-    # assert res['flags'] == 0
-    # for band, band_result in enumerate(res['band_results']):
-    #     logger.info('%s %s', band, band_result)
-    #
-    # if show:
-    #     s.plot_comparison(show=True)
-
-
-'''
-@pytest.mark.parametrize('seed', [99, 105])
-def test_shredder_stars_gaussian(seed, show=False):
-    """
-    Test with sim a gaussian psf and stars, fitting
-    gaussian to both object and psf
-    """
-    rng = np.random.RandomState(seed)
-    guess_model = 'gauss'
-    psf_ngauss = 1
-
-    conf = {'psf': {'model': 'gauss', 'fwhm': 0.9}}
-    sim = shredder.sim.Sim(rng=rng, config=conf)
-
-    sim['objects']['flux_range'] = [100, 200]
-    sim['objects']['hlr_range'] = (0.0001, 0.0001)
-
-    mbobs = sim()
-
-    scale = sim['image']['pixel_scale']
-
-    obj_data = mbobs.meta['obj_data']
-    objs = _add_T_and_scale(obj_data, scale)
-
-    gm_guess = shredder.get_guess(
-        objs,
-        jacobian=mbobs[0][0].jacobian,
-        model=guess_model,
-        rng=rng,
-    )
-
-    s = shredder.Shredder(
-        obs=mbobs,
-        psf_ngauss=psf_ngauss,
-        rng=rng,
-    )
-    s.shred(gm_guess)
-
-    if show:
-        s.plot_comparison(show=True, title='gaussians stars')
-
-    res = s.get_result()
-    logger.info('coadd: %s', res['coadd_result'])
-    assert res['flags'] == 0
-    for band, band_result in enumerate(res['band_results']):
-        logger.info('%s %s', band, band_result)
-
-    models = s.get_model_images()
-
-    chi2 = 0.0
-    dof = 0
-    for band, model in enumerate(models):
-        image = mbobs[band][0].image
-        dof += image.size
-
-        weight = mbobs[band][0].weight
-        diffim = image - model
-        chi2 += (diffim**2 * weight).sum()
-
-    dof = dof - 3
-    chi2per = chi2/dof
-
-    assert chi2per < 1.05
-
-
-@pytest.mark.parametrize('seed', [99, 105])
-def test_shredder_stars_moffat(seed, show=False):
-    """
-    Test with sim a gaussian psf and stars, fitting
-    gaussian to both object and psf
-    """
-
-    rng = np.random.RandomState(seed)
-    guess_model = 'gauss'
-    psf_ngauss = 3
-
-    sim = shredder.sim.Sim(rng=rng)
-
-    # need lower flux to pass this test, due to small issues
-    # with the modeling
-    # sim['objects']['flux_range'] = 100, 200
-    sim['objects']['flux_range'] = [20, 50]
-    sim['objects']['hlr_range'] = (0.0001, 0.0001)
-
-    mbobs = sim()
-
-    scale = sim['image']['pixel_scale']
-
-    obj_data = mbobs.meta['obj_data']
-    objs = _add_T_and_scale(obj_data, scale)
-
-    gm_guess = shredder.get_guess(
-        objs,
-        jacobian=mbobs[0][0].jacobian,
-        model=guess_model,
-        rng=rng,
-    )
-
-    s = shredder.Shredder(
-        obs=mbobs,
-        psf_ngauss=psf_ngauss,
-        rng=rng,
-    )
-    s.shred(gm_guess)
-
-    if show:
-        s.plot_comparison(show=True, title='moffat stars')
-
-    res = s.get_result()
-    logger.info('coadd: %s', res['coadd_result'])
-    logger.info('gmix:')
-    logger.info(res['coadd_gmix'])
-    assert res['flags'] == 0
-    for band, band_result in enumerate(res['band_results']):
-        logger.info('%s %s', band, band_result)
-
-    models = s.get_model_images()
-
-    chi2 = 0.0
-    dof = 0
-    for band, model in enumerate(models):
-        image = mbobs[band][0].image
-        dof += image.size
-
-        weight = mbobs[band][0].weight
-        diffim = image - model
-        chi2 += (diffim**2 * weight).sum()
-
-    dof = dof - 3
-    chi2per = chi2/dof
-
-    assert chi2per < 1.05
 
 
 @pytest.mark.parametrize('seed', [125, 871])
-def test_shredder(seed):
+def test_subtractor(seed):
     """
-    test that the fit is pretty good
+    test that the fit is pretty good; this should be equivalent
+    to the test_shredder test in test_shredding.py
     """
     rng = np.random.RandomState(seed)
     sim = shredder.sim.Sim(rng=rng)
@@ -247,16 +106,16 @@ def test_shredder(seed):
 
     assert res['flags'] == 0
 
-    models = s.get_model_images()
+    subtractor = shredder.ModelSubtractor(shredder=s, nobj=objs.size)
 
     chi2 = 0.0
     dof = 0
-    for band, model in enumerate(models):
-        image = mbobs[band][0].image
-        dof += image.size
+    for band, obslist in enumerate(subtractor.mbobs):
+        obs = obslist[0]
+        diffim = obs.image
+        dof += diffim.size
 
-        weight = mbobs[band][0].weight
-        diffim = image - model
+        weight = obs.weight
         chi2 += (diffim**2 * weight).sum()
 
     dof = dof - 3
@@ -265,6 +124,7 @@ def test_shredder(seed):
     assert chi2per < 1.05
 
 
+'''
 @pytest.mark.parametrize('seed', [9731, 7317])
 def test_shredder_bad_columns(seed, show=False):
     """
