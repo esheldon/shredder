@@ -8,6 +8,8 @@ def make_coadd_obs(mbobs):
 
     This is used for combining the coadds from multiple bands
 
+    TODO look this over and improve it
+
     Parameters
     ----------
     mbobs: ngmix.MultiBandObsList
