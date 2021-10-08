@@ -29,7 +29,7 @@ def compare_mbobs_and_models(mbobs,
                              seg=None,
                              rng=None,
                              title=None,
-                             titles=['image', 'model'],
+                             titles=('image', 'model'),
                              scale=0.5,
                              show=True):
     """
@@ -95,7 +95,7 @@ def compare_mbobs_and_models(mbobs,
 def compare_rgb_images(image,
                        model,
                        diffim,
-                       titles=['image', 'model'],
+                       titles=('image', 'model'),
                        seg=None,
                        weight=None,
                        chi2per=None,
@@ -176,10 +176,10 @@ def make_rgb(imlist, wtlist, nonlinear=0.12, scale=0.5):
 
     scales = scale*relative_scales
 
-    noise_fac = 0.1
-    rminval = noise_fac*np.sqrt(1/wtlist[2][0, 0])
-    gminval = noise_fac*np.sqrt(1/wtlist[1][0, 0])
-    bminval = noise_fac*np.sqrt(1/wtlist[0][0, 0])
+    # noise_fac = 0.1
+    # rminval = noise_fac*np.sqrt(1/wtlist[2][0, 0])
+    # gminval = noise_fac*np.sqrt(1/wtlist[1][0, 0])
+    # bminval = noise_fac*np.sqrt(1/wtlist[0][0, 0])
 
     # minval = min(rminval, gminval, bminval)
     minval = 0

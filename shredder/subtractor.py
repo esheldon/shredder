@@ -61,7 +61,7 @@ class ModelSubtractor(object):
         visualize a comparison of the model and data
         """
         if titles is None:
-            titles=['image', 'subtracted'],
+            titles = ('image', 'subtracted')
 
         subimages = [obslist[0].image for obslist in self.mbobs]
         return vis.compare_mbobs_and_models(
