@@ -57,12 +57,23 @@ class ModelSubtractor(object):
             self._add_or_subtract_model_image(index, 'subtract')
 
     def plot_object(self, index, stamp_size):
+        """
+        plot a postage stamp for the indicated object
+
+        Parameters
+        ----------
+        index: int
+            The index of the source
+        stamp_size: int
+            The stamp size; note the actual returned stamp size is always odd
+            so the object center is in the center pixel
+        """
         mbobs = self.get_object_mbobs(index=index, stamp_size=stamp_size)
         row, col = mbobs[0][0].jacobian.get_cen()
         objs = np.zeros(1, dtype=[('row', 'f4'), ('col', 'f4')])
         objs['row'] = row
         objs['col'] = col
-        vis.view_mbobs(
+        return vis.view_mbobs(
             mbobs,
             title=f'object {index+1}',
             objs=objs,
@@ -209,6 +220,9 @@ class ModelSubtractor(object):
         -------
         start, end to be used as a slice range
         """
+        if index < 0 or index > self.nobj-1:
+            raise IndexError(f'no such object index {index}')
+
         start = self.ngauss_per * index
         end = self.ngauss_per * (index + 1)
         return start, end
@@ -226,6 +240,9 @@ class ModelSubtractor(object):
         -------
         start, end to be used as a slice range
         """
+        if index < 0 or index > self.nobj-1:
+            raise IndexError(f'no such object index {index}')
+
         start = self.ngauss_per_convolved * index
         end = self.ngauss_per_convolved * (index + 1)
         return start, end
@@ -320,8 +337,9 @@ class ModelSubtractor(object):
 
 
 def _get_bbox(image_shape, row, col, stamp_size):
-    irow = int(row)
-    icol = int(col)
+    # we need to round these to make it agree with DM
+    irow = int(round(row))
+    icol = int(round(col))
     rad = int(stamp_size) // 2
     row_start, row_end = _get_start_end(
         image_dim=image_shape[0],
