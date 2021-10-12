@@ -1,37 +1,75 @@
 import numpy as np
 from matplotlib import pyplot as mplt
 
+DEFAULT_STRETCH = 1.25
+DEFAULT_Q = 7.5
 
-def view_mbobs(mbobs, scale=0.5, show=True, **kw):
+
+def view_mbobs(
+    mbobs,
+    title=None,
+    stretch=DEFAULT_STRETCH,
+    q=DEFAULT_Q,
+    show=True,
+    objs=None,
+):
     """
     make a color image of the MultiBandObsList
     """
 
     imlist = [olist[0].image for olist in mbobs]
-    wtlist = [olist[0].weight for olist in mbobs]
 
-    return view_rgb(imlist, wtlist, scale=scale, show=show, **kw)
+    return view_rgb(
+        imlist, stretch=stretch, q=q, show=show, title=title, objs=objs,
+    )
 
 
-def view_rgb(imlist, wtlist, scale=2, show=True, **kw):
+def view_rgb(
+    imlist, ax=None, stretch=DEFAULT_STRETCH, q=DEFAULT_Q,
+    title=None,
+    objs=None,
+    show=True,
+):
     """
     view rgb data
     """
-    from espy import images
+    if ax is None:
+        fig, ax = mplt.subplots()
 
-    rgb = make_rgb(imlist, wtlist, scale=scale)
-    plt = images.view(rgb, show=show, **kw)
-    return plt
+    rgb = make_rgb(imlist, stretch=stretch, q=q)
+
+    ax.imshow(rgb)
+
+    if objs is not None:
+        ax.scatter(
+            objs['col'], objs['row'],
+            s=2,
+            color='red', edgecolor='white',
+        )
+
+    if title is not None:
+        ax.set_title(title)
+
+    if show:
+        mplt.show()
+        mplt.close()
+    else:
+        return fig
 
 
-def compare_mbobs_and_models(mbobs,
-                             models,
-                             seg=None,
-                             rng=None,
-                             title=None,
-                             titles=('image', 'model'),
-                             scale=0.5,
-                             show=True):
+def compare_mbobs_and_models(
+    mbobs,
+    models,
+    seg=None,
+    rng=None,
+    title=None,
+    titles=('image', 'model'),
+    # scale=0.5,
+    stretch=DEFAULT_STRETCH,
+    q=DEFAULT_Q,
+    objs=None,
+    show=True,
+):
     """
     generate rgb images for data and model and make
     a comparison plot
@@ -65,18 +103,18 @@ def compare_mbobs_and_models(mbobs,
     if len(imlist) >= 3:
         image = make_rgb(
             imlist,
-            wtlist,
-            scale=scale,
+            stretch=stretch,
+            q=q,
         )
         model_image = make_rgb(
             models,
-            wtlist,
-            scale=scale,
+            stretch=stretch,
+            q=q,
         )
         diff_image = make_rgb(
             difflist,
-            wtlist,
-            scale=scale,
+            stretch=stretch,
+            q=q,
         )
     else:
         image = imlist[0]
@@ -93,6 +131,7 @@ def compare_mbobs_and_models(mbobs,
         rng=rng,
         title=title,
         titles=titles,
+        objs=objs,
         show=show,
     )
 
@@ -107,6 +146,7 @@ def compare_images(
     chi2per=None,
     rng=None,
     title=None,
+    objs=None,
     show=True,
 ):
     """
@@ -142,14 +182,27 @@ def compare_images(
 
     fig, axs = mplt.subplots(nrows=nrows, ncols=ncols)
 
-    axs[imrow, imcol].imshow(image)
-    axs[imrow, imcol].set_title(titles[0])
+    imax = axs[imrow, imcol]
+    modax = axs[modrow, modcol]
+    diffax = axs[diffrow, diffcol]
 
-    axs[modrow, modcol].imshow(model)
-    axs[modrow, modcol].set_title(titles[1])
+    imax.imshow(image)
+    imax.set_title(titles[0])
 
-    axs[diffrow, diffcol].imshow(diffim)
-    axs[diffrow, diffcol].set_title(diff_title)
+    modax.imshow(model)
+    modax.set_title(titles[1])
+
+    diffax.imshow(diffim)
+    diffax.set_title(diff_title)
+
+    if objs is not None:
+        for tax in [imax, modax, diffax]:
+            tax.scatter(
+                # objs['x'], objs['y'],
+                objs['col'], objs['row'],
+                s=1,
+                color='red', edgecolor='white',
+            )
 
     if seg is not None:
         plot_seg(seg, ax=axs[segrow, segcol], rng=rng)
@@ -172,7 +225,56 @@ def compare_images(
         return fig
 
 
-def make_rgb(imlist, wtlist, nonlinear=0.12, scale=0.5):
+def make_rgb(imlist, stretch=DEFAULT_STRETCH, q=DEFAULT_Q, minval=0):
+    """
+    make an rgb image using the input images and weights
+    """
+    from astropy.visualization.lupton_rgb import AsinhMapping
+    # from astropy.visualization import (
+    #     AsinhStretch,
+    #     imshow_norm,
+    # )
+    asinh = AsinhMapping(
+        minimum=0,
+        stretch=stretch,
+        Q=q,
+    )
+
+    ny, nx = imlist[0].shape
+
+    rgb = np.zeros((3, ny, nx), dtype='f4')
+    rgb[0, :, :] = imlist[2].clip(min=minval)
+    rgb[1, :, :] = imlist[1].clip(min=minval)
+    rgb[2, :, :] = imlist[0].clip(min=minval)
+
+    rgb = asinh.make_rgb_image(*rgb)
+
+    return rgb
+
+
+'''
+def view_mbobs_old(mbobs, scale=0.5, show=True, **kw):
+    """
+    make a color image of the MultiBandObsList
+    """
+
+    imlist = [olist[0].image for olist in mbobs]
+
+    return view_rgb(imlist, scale=scale, show=show, **kw)
+
+
+def view_rgb_old(imlist, scale=2, show=True, **kw):
+    """
+    view rgb data
+    """
+    from espy import images
+
+    rgb = make_rgb(imlist, scale=scale)
+    plt = images.view(rgb, show=show, **kw)
+    return plt
+
+
+def make_rgb_old(imlist, nonlinear=0.12, scale=0.5):
     """
     make an rgb image using the input images and weights
     """
@@ -182,11 +284,6 @@ def make_rgb(imlist, wtlist, nonlinear=0.12, scale=0.5):
     relative_scales = np.array([1.0, 1.0, 2.0])
 
     scales = scale*relative_scales
-
-    # noise_fac = 0.1
-    # rminval = noise_fac*np.sqrt(1/wtlist[2][0, 0])
-    # gminval = noise_fac*np.sqrt(1/wtlist[1][0, 0])
-    # bminval = noise_fac*np.sqrt(1/wtlist[0][0, 0])
 
     # minval = min(rminval, gminval, bminval)
     minval = 0
@@ -201,6 +298,7 @@ def make_rgb(imlist, wtlist, nonlinear=0.12, scale=0.5):
     )
     rgb.clip(max=1.0, out=rgb)
     return rgb
+'''
 
 
 def plot_seg(seg, ax, rng=None):

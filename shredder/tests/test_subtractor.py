@@ -124,12 +124,62 @@ def test_subtractor(seed):
     assert chi2per < 1.05
 
 
+@pytest.mark.parametrize('seed', [98, 12987])
+def test_subtractor_stamps(seed, show=False):
+    stamp_size = 32
+    rng = np.random.RandomState(seed)
+    sim = shredder.sim.Sim(rng=rng)
+    mbobs = sim()
+
+    guess_model = 'dev'
+    psf_ngauss = 2
+
+    scale = sim['image']['pixel_scale']
+
+    obj_data = mbobs.meta['obj_data']
+    objs = _add_T_and_scale(obj_data, scale)
+
+    gm_guess = shredder.get_guess(
+        objs,
+        jacobian=mbobs[0][0].jacobian,
+        model=guess_model,
+        rng=rng,
+    )
+
+    s = shredder.Shredder(obs=mbobs, psf_ngauss=psf_ngauss, rng=rng)
+    s.shred(gm_guess)
+
+    res = s.get_result()
+    logger.info('coadd: %s', res['coadd_result'])
+    for band, band_result in enumerate(res['band_results']):
+        logger.info('%s %s', band, band_result)
+
+    assert res['flags'] == 0
+
+    subtractor = shredder.ModelSubtractor(shredder=s, nobj=objs.size)
+
+    logger.info('%d objects', objs.size)
+
+    if show:
+        subtractor.plot_comparison(
+            titles=['image', 'all subtracted'],
+            objs=obj_data,
+        )
+
+    for iobj in range(objs.size):
+        with subtractor.add_source(iobj):
+            _ = subtractor.get_object_mbobs(index=iobj, stamp_size=stamp_size)
+            if show:
+                subtractor.plot_object(index=iobj, stamp_size=stamp_size)
+
+
 if __name__ == '__main__':
     shredder.setup_logging('info')
 
     show = True
-    seed = 53
+    seed = 99
     rng = np.random.RandomState(seed)
     for i in range(100):
         # test_shredder_stars_moffat(rng.randint(0, 2**16))
-        test_subtractor_smoke(rng.randint(0, 2**16), show=show)
+        # test_subtractor_smoke(rng.randint(0, 2**16), show=show)
+        test_subtractor_stamps(rng.randint(0, 2**16), show=show)
