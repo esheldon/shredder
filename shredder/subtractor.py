@@ -116,10 +116,12 @@ class ModelSubtractor(object):
             obs_orig = self.mbobs[band][0]
             stampim = obs_orig.image[row_start:row_end, col_start:col_end]
             stampwt = obs_orig.weight[row_start:row_end, col_start:col_end]
+            # stampbmask = obs_orig.bmask[row_start:row_end, col_start:col_end]
 
             stampobs = ngmix.Observation(
                 image=stampim,
                 weight=stampwt,
+                # bmask=stampbmask,
                 jacobian=jacobian,
                 psf=obs_orig.psf,
             )
