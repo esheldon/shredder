@@ -100,6 +100,8 @@ class ModelSubtractor(object):
         jacobian = obs0_orig.jacobian.copy()
         row_orig, col_orig = jacobian.get_rowcol(v=v_orig, u=u_orig)
 
+        # this may trim off one at the beginning or end in some cases
+        # seems unavoidable
         row_start, row_end, col_start, col_end = _get_bbox(
             image_shape=obs0_orig.image.shape,
             row=row_orig, col=col_orig,
@@ -361,34 +363,75 @@ class ModelSubtractor(object):
 
 
 def _get_bbox(image_shape, row, col, stamp_size):
-    # we need to round these to make it agree with DM
-    irow = int(round(row))
-    icol = int(round(col))
+
     rad = int(stamp_size) // 2
+
     row_start, row_end = _get_start_end(
         image_dim=image_shape[0],
-        cen=irow,
-        rad=rad,
-        type='row',
+        cen=row, rad=rad,
     )
     col_start, col_end = _get_start_end(
         image_dim=image_shape[1],
-        cen=icol,
-        rad=rad,
-        type='col',
+        cen=col, rad=rad,
     )
+
+    row_start, row_end, col_start, col_end = _trim_one_maybe(
+        image_shape,
+        row_start, row_end, col_start, col_end,
+    )
+
+    _check_start_end(
+        start=row_start, end=row_end, image_dim=image_shape[0], type='row',
+    )
+    _check_start_end(
+        start=col_start, end=col_end, image_dim=image_shape[1], type='col',
+    )
+    assert row_start - row_end == col_start - col_end, 'non round found'
 
     return row_start, row_end, col_start, col_end
 
 
-def _get_start_end(image_dim, cen, rad, type):
-    start = cen - rad
-    end = cen + rad + 1
+def _trim_one_maybe(image_shape, row_start, row_end, col_start, col_end):
+    if row_start < 0:
+        if row_start == -1:
+            # maintain square image
+            row_start += 1
+            col_start += 1
 
+    if col_start < 0:
+        if col_start == -1:
+            # maintain square image
+            col_start += 1
+            row_start += 1
+
+    if row_end > image_shape[0]:
+        if row_end == image_shape[0] + 1:
+            # maintain square image
+            row_end -= 1
+            col_end -= 1
+
+    if col_end > image_shape[1]:
+        if col_end == image_shape[1] + 1:
+            # maintain square image
+            col_end -= 1
+            row_end -= 1
+
+    return row_start, row_end, col_start, col_end
+
+
+def _check_start_end(start, end, image_dim, type):
     if start < 0 or start > image_dim:
         raise IndexError(
             f'requested bbox {type} range [{start}:{end}) is '
             f'out of bounds [0:{image_dim})'
         )
 
+    return start, end
+
+
+def _get_start_end(image_dim, cen, rad):
+    # this is how the stack code is currently working
+    icen = int(round(cen))
+    start = icen - rad
+    end = icen + rad + 1
     return start, end
