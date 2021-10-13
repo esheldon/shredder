@@ -3,6 +3,9 @@ from matplotlib import pyplot as mplt
 
 DEFAULT_STRETCH = 1.25
 DEFAULT_Q = 7.5
+SIZE = 16
+COLOR = 'red'
+EDGECOLOR = 'white'
 
 
 def view_mbobs(
@@ -19,12 +22,12 @@ def view_mbobs(
 
     imlist = [olist[0].image for olist in mbobs]
 
-    return view_rgb(
+    return view_image(
         imlist, stretch=stretch, q=q, show=show, title=title, objs=objs,
     )
 
 
-def view_rgb(
+def view_image(
     imlist, ax=None, stretch=DEFAULT_STRETCH, q=DEFAULT_Q,
     title=None,
     objs=None,
@@ -33,18 +36,26 @@ def view_rgb(
     """
     view rgb data
     """
+    from astropy.visualization import (
+        AsinhStretch,
+        imshow_norm,
+    )
+
     if ax is None:
         fig, ax = mplt.subplots()
 
-    rgb = make_rgb(imlist, stretch=stretch, q=q)
-
-    ax.imshow(rgb)
+    if len(imlist) >= 3:
+        image = make_rgb(imlist, stretch=stretch, q=q)
+        ax.imshow(image)
+    elif len(imlist) == 1:
+        imshow_norm(imlist[0], ax=ax, stretch=AsinhStretch())
+    else:
+        raise ValueError('can only do 3d or 1d')
 
     if objs is not None:
         ax.scatter(
             objs['col'], objs['row'],
-            s=2,
-            color='red', edgecolor='white',
+            s=SIZE, color=COLOR, edgecolor=EDGECOLOR,
         )
 
     if title is not None:
@@ -200,8 +211,7 @@ def compare_images(
             tax.scatter(
                 # objs['x'], objs['y'],
                 objs['col'], objs['row'],
-                s=1,
-                color='red', edgecolor='white',
+                s=SIZE, color=COLOR, edgecolor=EDGECOLOR,
             )
 
     if seg is not None:

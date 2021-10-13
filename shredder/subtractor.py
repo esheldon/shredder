@@ -249,7 +249,7 @@ class ModelSubtractor(object):
         end = self.ngauss_per_convolved * (index + 1)
         return start, end
 
-    def plot_comparison(self, titles=None, **kw):
+    def plot_comparison(self, titles=None, show=True, **kw):
         """
         visualize a comparison of the model and data
         """
@@ -257,12 +257,34 @@ class ModelSubtractor(object):
             titles = ('image', 'subtracted')
 
         subimages = [obslist[0].image for obslist in self.mbobs]
+        objs = self.get_positions()
         return vis.compare_mbobs_and_models(
             self.shredder.mbobs,
             subimages,
             titles=titles,
+            objs=objs,
+            show=show,
             **kw
         )
+
+    def get_positions(self):
+        """
+        get array with row/col for each object
+        """
+        dt = [('row', 'f4'), ('col', 'f4')]
+        objs = np.zeros(self.nobj, dtype=dt)
+
+        obs0_orig = self.shredder.mbobs[0][0]
+        for index in range(self.nobj):
+            gm = self.get_object_gmix(index, band=0)
+            v_orig, u_orig = gm.get_cen()
+
+            jacobian = obs0_orig.jacobian.copy()
+            row_orig, col_orig = jacobian.get_rowcol(v=v_orig, u=u_orig)
+            objs['row'][index] = row_orig
+            objs['col'][index] = col_orig
+
+        return objs
 
     def _add_or_subtract_model_image(self, index, type):
         mbobs = self.mbobs
