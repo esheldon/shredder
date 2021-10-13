@@ -55,6 +55,7 @@ class Shredder(object):
         # the "coadd" result and would not actually coadd
 
         self.mbobs = obs
+        self.nband = len(self.mbobs)
         self.psf_ngauss = psf_ngauss
 
         self.rng = rng
@@ -68,11 +69,14 @@ class Shredder(object):
         self.tol = tol
         self.vary_sky = vary_sky
 
-        self.coadd_psfres = self._do_psf_fits(self.mbobs, psf_ngauss)
+        self.band_psfres = self._do_psf_fits(self.mbobs, psf_ngauss)
 
-        self.coadd_obs = coadding.make_coadd_obs(self.mbobs)
+        if self.nband > 1:
+            self.coadd_obs = coadding.make_coadd_obs(self.mbobs)
+        else:
+            self.coadd_obs = self.mbobs[0][0]
 
-        self.band_psfres = self._do_psf_fits(self.coadd_obs, psf_ngauss)
+        self.coadd_psfres = self._do_psf_fits(self.coadd_obs, psf_ngauss)
 
     @property
     def result(self):
@@ -171,7 +175,13 @@ class Shredder(object):
             # we cannot proceed without the coadd fit
             res['flags'] |= procflags.COADD_FAILURE
         else:
-            self._do_multiband_fit()
+            if self.nband > 1:
+                self._do_multiband_fit()
+            else:
+                res['band_results'] = [res['coadd_result']]
+                res['band_psf_gmix'] = [res['coadd_psf_gmix']]
+                res['band_gmix'] = [res['coadd_gmix']]
+                res['band_gmix_convolved'] = [res['coadd_gmix_convolved']]
 
     def _do_coadd_fit(self, gmix_guess):
         """
