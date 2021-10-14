@@ -5,7 +5,7 @@ we run
 
 import logging
 import ngmix
-from .sexceptions import PSFFailure
+from ngmix.gexceptions import BootPSFFailure
 
 logger = logging.getLogger(__name__)
 
@@ -45,11 +45,15 @@ def do_psf_fit(obs, ngauss, ntry=4, rng=None):
         }
 
         if ngauss == 1:
-            guesser = ngmix.guessers.SimplePSFGuesser(
-                rng=rng,
-                guess_from_moms=True,
+            # guesser = ngmix.guessers.SimplePSFGuesser(
+            #     rng=rng,
+            #     guess_from_moms=True,
+            # )
+            # fitter = ngmix.fitting.Fitter(model='gauss', fit_pars=lm_pars)
+            fitter = ngmix.admom.AdmomFitter(rng=rng)
+            guesser = ngmix.guessers.GMixPSFGuesser(
+                rng=rng, ngauss=1, guess_from_moms=True,
             )
-            fitter = ngmix.fitting.Fitter(model='gauss', fit_pars=lm_pars)
             runner = ngmix.runners.PSFRunner(
                 fitter=fitter,
                 guesser=guesser,
@@ -101,7 +105,8 @@ def do_psf_fit(obs, ngauss, ntry=4, rng=None):
                     logger.info('retrying psf fit')
 
         if res['flags'] != 0:
-            raise PSFFailure('psf fitting failed: %s' % str(res))
+            logger.info('psf fitting failed: %s' % str(res))
+            raise BootPSFFailure('psf fitting failed: %s' % str(res))
 
         gmix = res.get_gmix()
         psf_obs.set_gmix(gmix)

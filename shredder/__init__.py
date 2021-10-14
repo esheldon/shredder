@@ -17,4 +17,3 @@ from .guesses import get_guess
 from . import psf_fitting
 from . import logging
 from .logging import setup_logging
-from . import sexceptions

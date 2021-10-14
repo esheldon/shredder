@@ -10,7 +10,6 @@ from . import procflags
 from . import coadding
 from . import vis
 from .psf_fitting import do_psf_fit
-from .sexceptions import PSFFailure
 
 logger = logging.getLogger(__name__)
 
@@ -69,14 +68,14 @@ class Shredder(object):
         self.tol = tol
         self.vary_sky = vary_sky
 
-        self.band_psfres = self._do_psf_fits(self.mbobs, psf_ngauss)
+        self._do_psf_fits(self.mbobs, psf_ngauss)
 
         if self.nband > 1:
             self.coadd_obs = coadding.make_coadd_obs(self.mbobs)
         else:
             self.coadd_obs = self.mbobs[0][0]
 
-        self.coadd_psfres = self._do_psf_fits(self.coadd_obs, psf_ngauss)
+        self._do_psf_fits(self.coadd_obs, psf_ngauss)
 
     @property
     def result(self):
@@ -145,14 +144,6 @@ class Shredder(object):
 
         self._result = {'flags': 0}
         res = self._result
-
-        if self.coadd_psfres['flags'] != 0:
-            res['flags'] = self.coadd_psfres['flags']
-            return
-
-        elif self.band_psfres['flags'] != 0:
-            res['flags'] = self.band_psfres['flags']
-            return
 
         coadd_result = self._do_coadd_fit(gmix_guess)
 
@@ -277,14 +268,15 @@ class Shredder(object):
 
     def _do_psf_fits(self, mbobs, psf_ngauss):
         """
-        perform psf fits, catching errors
+        perform psf fits
         """
+        do_psf_fit(mbobs, psf_ngauss, rng=self.rng)
 
-        try:
-            do_psf_fit(mbobs, psf_ngauss, rng=self.rng)
-            flags = 0
-        except PSFFailure as err:
-            logger.info(str(err))
-            flags = procflags.PSF_FAILURE
-
-        return {'flags': flags}
+        # try:
+        #     do_psf_fit(mbobs, psf_ngauss, rng=self.rng)
+        #     flags = 0
+        # except PSFFailure as err:
+        #     logger.info(str(err))
+        #     flags = procflags.PSF_FAILURE
+        #
+        # return {'flags': flags}
