@@ -2,7 +2,7 @@ from distutils.core import setup
 
 setup(
     name='shredder',
-    version='v0.9.1',
+    version='0.9.1',
     url="https://github.com/esheldon/shredder",
     description='An astronomical image deblender',
     license='GPL',
