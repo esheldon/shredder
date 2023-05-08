@@ -71,5 +71,4 @@ was 35 seconds.
 - esutil
 - pytest (optional for unit tests)
 - galsim (optional for simulations and tests)
-- biggles (optional for visualization)
 - images (optional for visualization)
