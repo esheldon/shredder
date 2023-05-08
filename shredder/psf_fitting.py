@@ -38,13 +38,12 @@ def do_psf_fit(obs, ngauss, ntry=4, rng=None):
         psf_obs = obs.psf
 
         scale = psf_obs.jacobian.scale
-        lm_pars = {
-            'xtol': 1.0e-5,
-            'ftol': 1.0e-5,
-            'maxfev': 2000,
-        }
-
         if ngauss == 1:
+            # lm_pars = {
+            #     'xtol': 1.0e-5,
+            #     'ftol': 1.0e-5,
+            #     'maxfev': 2000,
+            # }
             # guesser = ngmix.guessers.SimplePSFGuesser(
             #     rng=rng,
             #     guess_from_moms=True,
