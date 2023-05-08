@@ -1,5 +1,4 @@
 import numpy as np
-from matplotlib import pyplot as mplt
 
 DEFAULT_STRETCH = 1.25
 DEFAULT_Q = 7.5
@@ -36,6 +35,8 @@ def view_image(
     """
     view rgb data
     """
+    from matplotlib import pyplot as mplt
+
     from astropy.visualization import (
         AsinhStretch,
         imshow_norm,
@@ -163,6 +164,7 @@ def compare_images(
     """
     make a comparison of the image with the model
     """
+    from matplotlib import pyplot as mplt
 
     if chi2per is not None:
         diff_title = 'chi2/dof: %.2f' % chi2per
