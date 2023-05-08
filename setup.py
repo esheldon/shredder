@@ -10,8 +10,9 @@ pth = os.path.join(
 
 setup(
     name='shredder',
-    version='1.0.0',
-    description='Astronomical image deblender',
+    version=__version__,
+    url="https://github.com/esheldon/shredder",
+    description='An astronomical image deblender',
     license='GPL',
     author='Erin Scott Sheldon',
     author_email='erin.sheldon@gmail.com',

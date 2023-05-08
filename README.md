@@ -1,6 +1,8 @@
 # Shredder
 An astronomical image deblender
 
+![meme](https://i.imgflip.com/5qa8b2.jpg)
+
 ## Examples
 
 An example using the built-in simulation.  This example requires galsim to be
