@@ -273,8 +273,8 @@ class Sim(dict):
         g1disk, g2disk = self.gpdf.sample2d()
 
         bulge_angle_offset = rng.uniform(
-                low=o['bulge_angle_offet_range'][0],
-                high=o['bulge_angle_offet_range'][1],
+            low=o['bulge_angle_offet_range'][0],
+            high=o['bulge_angle_offet_range'][1],
         )
         bulge_angle_offset = np.deg2rad(bulge_angle_offset)
         disk_shape = ngmix.Shape(g1disk, g2disk)
