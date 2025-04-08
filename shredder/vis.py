@@ -62,6 +62,7 @@ def view_image(
     if title is not None:
         ax.set_title(title)
 
+    fig.tight_layout()
     if show:
         mplt.show()
         mplt.close()
