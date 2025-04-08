@@ -50,4 +50,4 @@ jobs:
       - name: test
         shell: bash -l {0}
         run: |
-          pytest -vv
+          pytest -vv tests
