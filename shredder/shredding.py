@@ -96,12 +96,16 @@ class Shredder(object):
         """
         get a list of model images for all bands
         """
-        imlist = []
+        import numpy as np
+
+        dims = self.mbobs[0][0].image.shape
+        images = np.zeros((self.nband, dims[0], dims[1]))
 
         for band in range(len(self.mbobs)):
             image = self.get_model_image(band=band)
-            imlist.append(image)
-        return imlist
+            images[band, :, :] = image
+
+        return images
 
     def get_model_image(self, band):
         """
@@ -114,6 +118,92 @@ class Shredder(object):
         dims = self.mbobs[band][0].image.shape
         jacob = self.mbobs[band][0].jacobian
         return gm.make_image(dims, jacobian=jacob)
+
+    def get_object_model_image(self, band, iobj, ngauss_per):
+        """
+        get a model image for the specified band and object
+        """
+
+        gm = self.get_convolved_object_gmix(
+            band=band,
+            iobj=iobj,
+            ngauss_per=ngauss_per,
+        )
+
+        dims = self.mbobs[band][0].image.shape
+        jacob = self.mbobs[band][0].jacobian
+        return gm.make_image(dims, jacobian=jacob)
+
+    def get_object_model_images(self, band, ngauss_per):
+        """
+        get model images for the specified band
+        """
+        import numpy as np
+
+        nobj = self.get_nobj(ngauss_per)
+        dims = self.mbobs[band][0].image.shape
+        images = np.zeros((nobj, dims[0], dims[1]))
+
+        for iobj in range(nobj):
+            im = self.get_object_model_image(
+                band=band, iobj=iobj, ngauss_per=ngauss_per,
+            )
+            images[iobj, :, :] = im
+
+        return images
+
+    def get_object_gmix(self, band, iobj, ngauss_per):
+        import ngmix
+        ipars = self.get_object_pars(
+            band=band, iobj=iobj, ngauss_per=ngauss_per,
+        )
+        return ngmix.GMix(pars=ipars)
+
+    def get_convolved_object_gmix(self, band, iobj, ngauss_per):
+        gm = self.get_object_gmix(
+            band=band, iobj=iobj, ngauss_per=ngauss_per,
+        )
+        psf_gmix = self.mbobs[band][0].psf.gmix
+        return gm.convolve(psf_gmix)
+
+    def get_object_pars(self, band, iobj, ngauss_per):
+        res = self.get_result()
+        gmall = res['band_gmix'][band]
+        pars = gmall.get_full_pars()
+
+        npars_per_obj = 6 * ngauss_per
+        assert pars.size % npars_per_obj == 0
+
+        nobj = pars.size // npars_per_obj
+
+        pars = pars.reshape((nobj, npars_per_obj))
+
+        return pars[iobj]
+
+    def get_nobj(self, ngauss_per):
+        res = self.get_result()
+        gmall = res['band_gmix'][0]
+        pars = gmall.get_full_pars()
+
+        npars_per_obj = 6 * ngauss_per
+        assert pars.size % npars_per_obj == 0
+
+        nobj = pars.size // npars_per_obj
+        return nobj
+
+    def get_convolved_gmix(self, band):
+        """
+        Get the gmix for the given band.
+        """
+        res = self.get_result()
+        return res['band_gmix_convolved'][band]
+
+    def get_gmix(self, band):
+        """
+        Get the gmix for the given band.
+        """
+        res = self.get_result()
+        return res['band_gmix'][band]
 
     def plot(self, **kw):
         """
